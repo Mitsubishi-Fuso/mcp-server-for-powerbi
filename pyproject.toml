@@ -1,0 +1,35 @@
+[project]
+name = "mcp-server-for-powerbi"
+version = "0.2.0"
+description = "MCP Server for Power BI providing workspace, dataset, and DAX query tools with OAuth support"
+requires-python = ">=3.12"
+dependencies = [
+  "fastmcp ~= 2.14",
+  "requests>=2.32.5",
+  "PyJWT>=2.10.1",
+  "cryptography>=44.0.0",
+  "starlette>=0.41.3",
+  "uvicorn==0.40.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ty",
+  "ruff"
+]
+
+[project.scripts]
+mcp-for-powerbi = "mcp_for_powerbi.server:main"
+mcp-for-powerbi-http = "mcp_for_powerbi.server_http:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mcp_for_powerbi*"]
+exclude = ["helm*", "build*", "scripts*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

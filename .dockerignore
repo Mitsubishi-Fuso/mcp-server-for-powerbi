@@ -1,0 +1,70 @@
+# === Python Runtime ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# === Build & Distribution ===
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# === Package Managers ===
+requirements.txt
+uv.lock
+
+# === Virtual Environments ===
+venv/
+env/
+.venv/
+
+# === IDEs & Editors ===
+.vscode/
+*.swp
+*.swo
+*~
+
+# === AI Tools ===
+.claude/
+.crush/
+
+# === Type Checkers & Linters ===
+.ruff_cache/
+
+# === Version Control ===
+.git/
+.gitignore
+
+# === Documentation ===
+*.md
+!README.md
+docs/
+
+# === Test & Development ===
+scripts/
+tests/
+test_*.py
+*_test.py
+
+# === CI/CD ===
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# === OS Specific ===
+.DS_Store
+Thumbs.db
+
+# === Project Specific ===
+CRUSH.md
+CLAUDE.md
+agent_instructions.md
+
+# === Environment Variables ===
+.env
+.env.local
+.env.*
+!.env.example

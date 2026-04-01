@@ -1,0 +1,74 @@
+# === Python Runtime ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# === Build & Distribution ===
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+pip-wheel-metadata/
+share/python-wheels/
+pip-log.txt
+pip-delete-this-directory.txt
+power_bi_mcp_server.egg-info/
+
+# === Testing & Coverage ===
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+*.log
+.pytest_cache/
+
+# === Virtual Environments ===
+venv/
+env/
+.venv/
+*.bak/
+.python-version
+.pypackages/
+
+# === Package Managers ===
+Pipfile.lock
+uv.lock
+
+# === IDEs & Editors ===
+.vscode/
+.idea/
+
+# === AI Tools ===
+.claude/
+.crush/
+
+# === Type Checkers & Linters ===
+.ruff_cache/
+
+# === OS Specific ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Debug ===
+cython_debug/
+
+# === Environment Variables ===
+.env
+.env.local
+.env.*.local
