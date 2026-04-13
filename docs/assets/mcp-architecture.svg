@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1600 900" width="1600" height="900">
+  <style>
+    text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .title { font-size: 18px; font-weight: 600; fill: #111827; }
+    .layer-label { font-size: 12px; font-weight: 700; fill: #6b7280; letter-spacing: 0.1em; }
+    .node-label { font-size: 16px; font-weight: 600; fill: #111827; }
+    .sub-label { font-size: 13px; fill: #6b7280; }
+    .tool-text { font-size: 13px; fill: #374151; font-family: "SF Mono", "Monaco", "Consolas", monospace; }
+  </style>
+  <defs>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/></marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.05"/></filter>
+
+  <linearGradient id="linearGradient22708">
+   <stop stop-color="#21facf" offset="0"/>
+   <stop stop-color="#0970ef" offset="1"/>
+  </linearGradient>
+  <linearGradient id="linearGradient6949" x1="68.454" x2="198.59" y1="246.73" y2="96.35" gradientTransform="translate(-5.754 -56.594)" gradientUnits="userSpaceOnUse">
+   <stop stop-color="#72004e" offset="0"/>
+   <stop stop-color="#0015b1" offset="1"/>
+  </linearGradient>
+  <linearGradient id="linearGradient22718" x1="56.735" x2="155.2" y1="246.96" y2="58.575" gradientUnits="userSpaceOnUse">
+   <stop stop-color="#4f00da" offset="0"/>
+   <stop stop-color="#e5311b" offset="1"/>
+  </linearGradient>
+  <linearGradient id="linearGradient23463" x1="68.454" x2="198.59" y1="246.73" y2="96.35" gradientUnits="userSpaceOnUse" xlink:href="#linearGradient22708"/>
+  <linearGradient id="linearGradient903" x1="54.478" x2="192.1" y1="247.56" y2="9.8095" gradientTransform="matrix(.87923 0 0 .87923 -9.551 48.787)" gradientUnits="userSpaceOnUse">
+   <stop stop-color="#dc180d" offset="0"/>
+   <stop stop-color="#f96e20" offset=".5"/>
+   <stop stop-color="#f4ce41" offset="1"/>
+  </linearGradient>
+  <linearGradient id="linearGradient918" x1="39.468" x2="154.99" y1="204.22" y2="124.47" gradientUnits="userSpaceOnUse" xlink:href="#linearGradient22708"/>
+ 
+
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+<mask id="imagine-text-gaps-9a8pxd" maskUnits="userSpaceOnUse"><rect x="0" y="0" width="680" height="520" fill="white"/><rect x="6.525124549865723" y="2.370213031768799" width="19.33343505859375" height="26.037235260009766" fill="black" rx="2"/><rect x="254" y="43.370216369628906" width="149.17604064941406" height="26.037235260009766" fill="black" rx="2"/><rect x="248.00001525878906" y="99.88875579833984" width="95.86361694335938" height="22.88905906677246" fill="black" rx="2"/><rect x="258" y="145.8887481689453" width="152.7865753173828" height="22.88905906677246" fill="black" rx="2"/><rect x="258" y="190.8887481689453" width="41.282127380371094" height="22.88905906677246" fill="black" rx="2"/><rect x="258" y="235.88876342773438" width="105.93778228759766" height="22.88905906677246" fill="black" rx="2"/><rect x="258" y="280.8887634277344" width="76.38427734375" height="22.88905906677246" fill="black" rx="2"/><rect x="258" y="325.8887634277344" width="92.99705505371094" height="22.88905906677246" fill="black" rx="2"/></mask>
+
+<linearGradient id="paint0_linear_1263_124590" x1="57.2956" y1="256.004" x2="57.2956" y2="162.922" gradientUnits="userSpaceOnUse">
+<stop offset="0.056" stop-color="#2AAC94"/>
+<stop offset="0.155" stop-color="#239C87"/>
+<stop offset="0.372" stop-color="#177E71"/>
+<stop offset="0.588" stop-color="#0E6961"/>
+<stop offset="0.799" stop-color="#095D57"/>
+<stop offset="1" stop-color="#085954"/>
+</linearGradient>
+<linearGradient id="paint1_linear_1263_124590" x1="174.916" y1="188.465" x2="85.0325" y2="90.7042" gradientUnits="userSpaceOnUse">
+<stop offset="0.0417478" stop-color="#ABE88E"/>
+<stop offset="0.548926" stop-color="#2AAA92"/>
+<stop offset="0.906" stop-color="#117865"/>
+</linearGradient>
+<linearGradient id="paint2_linear_1263_124590" x1="-45.966" y1="183.712" x2="39.5711" y2="154.542" gradientUnits="userSpaceOnUse">
+<stop stop-color="#6AD6F9"/>
+<stop offset="1" stop-color="#6AD6F9" stop-opacity="0"/>
+</linearGradient>
+<linearGradient id="paint3_linear_1263_124590" x1="19.2842" y1="71.8021" x2="246.968" y2="71.8021" gradientUnits="userSpaceOnUse">
+<stop offset="0.043" stop-color="#25FFD4"/>
+<stop offset="0.874" stop-color="#55DDB9"/>
+</linearGradient>
+<linearGradient id="paint4_linear_1263_124590" x1="106.921" y1="9.90926" x2="155.747" y2="114.612" gradientUnits="userSpaceOnUse">
+<stop stop-color="#F4E084" stop-opacity="0.6"/>
+<stop offset="0.534" stop-color="#F4E084" stop-opacity="0"/>
+</linearGradient>
+<linearGradient id="paint5_linear_1263_124590" x1="188.162" y1="-55.2641" x2="253.98" y2="45.835" gradientUnits="userSpaceOnUse">
+<stop stop-color="#ABF5E2"/>
+<stop offset="1" stop-color="#4EE6BD"/>
+</linearGradient>
+<linearGradient id="paint6_linear_1263_124590" x1="137.635" y1="0" x2="137.635" y2="143.604" gradientUnits="userSpaceOnUse">
+<stop stop-color="#1F937E"/>
+<stop offset="1" stop-color="#9EE09F"/>
+</linearGradient>
+<linearGradient id="paint7_linear_1263_124590" x1="137.635" y1="0" x2="137.635" y2="143.604" gradientUnits="userSpaceOnUse">
+<stop stop-color="#1F937E"/>
+<stop offset="1" stop-color="#C0ECC7"/>
+</linearGradient>
+<linearGradient id="paint8_linear_1263_124590" x1="19.2842" y1="39.9783" x2="224.382" y2="135.216" gradientUnits="userSpaceOnUse">
+<stop stop-color="#6AD6F9"/>
+<stop offset="0.229501" stop-color="#60E9D0"/>
+<stop offset="0.650711" stop-color="#6DE9BB"/>
+<stop offset="0.99354" stop-color="#ABE88E"/>
+</linearGradient>
+<linearGradient id="paint9_linear_1263_124590" x1="38.258" y1="57.8" x2="149.781" y2="82.466" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0"/>
+<stop offset="0.458511" stop-color="white"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+<linearGradient id="paint10_linear_1263_124590" x1="75.237" y1="153.341" x2="77.8722" y2="75.1328" gradientUnits="userSpaceOnUse">
+<stop offset="0.204642" stop-color="#063D3B" stop-opacity="0"/>
+<stop offset="0.58553" stop-color="#063D3B" stop-opacity="0.236587"/>
+<stop offset="0.872285" stop-color="#063D3B" stop-opacity="0.75"/>
+</linearGradient>
+<linearGradient id="paint11_linear_1263_124590" x1="-7.61797" y1="145.563" x2="87.6861" y2="163.487" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0"/>
+<stop offset="0.458511" stop-color="white"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+<linearGradient id="paint12_linear_1263_124590" x1="61.2263" y1="230.213" x2="42.6359" y2="139.292" gradientUnits="userSpaceOnUse">
+<stop offset="0.064" stop-color="#063D3B" stop-opacity="0"/>
+<stop offset="0.17" stop-color="#063D3B" stop-opacity="0.135"/>
+<stop offset="0.562" stop-color="#063D3B" stop-opacity="0.599"/>
+<stop offset="0.85" stop-color="#063D3B" stop-opacity="0.9"/>
+<stop offset="1" stop-color="#063D3B"/>
+</linearGradient>
+<clipPath id="clip0_1263_124590">
+<rect width="255.998" height="255.998" fill="white"/>
+</clipPath>
+
+  </defs>
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <rect x="40" y="80" width="440" height="720" rx="12" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="8,4"/>
+  <text x="60" y="110" class="layer-label">CLIENT SIDE</text>
+  <rect x="520" y="80" width="450" height="720" rx="12" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5" stroke-dasharray="8,4"/>
+  <text x="540" y="110" class="layer-label">MCP LAYER</text>
+  <rect x="1000" y="80" width="560" height="720" rx="12" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5" stroke-dasharray="8,4"/>
+  <text x="1020" y="110" class="layer-label">MICROSOFT PLATFORM</text>
+  <g transform="translate(110, 150)">
+    <rect width="300" height="110" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <g transform="translate(50, 55)">
+      <circle cx="0" cy="-18" r="10" fill="none" stroke="#6b7280" stroke-width="1.5"/>
+      <path d="M -14,12 Q -14,-4 0,-4 Q 14,-4 14,12" fill="none" stroke="#6b7280" stroke-width="1.5"/>
+    </g>
+    <text x="180" y="62" class="node-label" text-anchor="middle">User</text>
+  </g>
+  <g transform="translate(110, 330)">
+    <rect width="300" height="140" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <g transform="translate(25, 25) scale(0.048)">
+<g transform="matrix(4.946 0 0 4.946 -9.798 -9.7983)">
+  <path transform="translate(-5.7543 -56.594)" d="m111.25 81.024c-48.394-1.5e-5 -87.625 39.231-87.625 87.625 0.0174 20.443 7.1818 40.236 20.253 55.954 0.2523-0.42224 0.53629-0.82423 0.85783-1.2061 4.892-5.8104 10.427-10.214 18.946-19.252 3.7871-4.0176 6.3412 15.63 7.6435 14.309 1.3243-1.3439 0.1473-19.001 3.5062-24.674 6.0563-10.228 10.733-18.067 22.336-30.607 2.8443-3.0741 5.5333 11.223 6.8063 9.2361 1.1421-1.7823-0.26941-18.641 1.5663-23.773 4.8819-13.647 3.3631-13.21 15.582-31.378 2.098-3.1195 6.496 7.9402 7.2151 6.3268 0.70126-1.5734-0.84173-11.131-0.67179-15.805 0.37161-3.1498 3.6036-13.059 7.7055-23.367-7.8432-2.2472-15.962-3.3881-24.12-3.3895zm43.142 11.356c5.5662 61.595-18.426 120.7-62.796 161.65 6.446 1.4857 13.04 2.2367 19.655 2.2386 48.394 1e-5 87.625-39.231 87.625-87.625-3.1e-4 -31.581-16.995-60.719-44.484-76.268z" display="none" fill="url(#linearGradient22718)"/>
+  <path transform="translate(-5.754 -56.594)" d="m111.25 81.024c-48.394-1.5e-5 -87.625 39.231-87.625 87.625 0.0174 20.443 7.1818 40.236 20.253 55.954 0.2523-0.42224 0.53629-0.82423 0.85783-1.2061 4.892-5.8104 10.427-10.214 18.946-19.252 3.7871-4.0176 6.3412 15.63 7.6435 14.309 1.3243-1.3439 0.1473-19.001 3.5062-24.674 6.0563-10.228 10.733-18.067 22.336-30.607 2.8443-3.0741 5.5333 11.223 6.8063 9.2361 1.1421-1.7823-0.26941-18.641 1.5663-23.773 4.8819-13.647 3.3631-13.21 15.582-31.378 2.098-3.1195 6.496 7.9402 7.2151 6.3268 0.70126-1.5734-0.84173-11.131-0.67179-15.805 0.37161-3.1498 3.6036-13.059 7.7055-23.367-7.8432-2.2472-15.962-3.3881-24.12-3.3895zm43.142 11.356c5.5662 61.595-18.426 120.7-62.796 161.65 6.446 1.4857 13.04 2.2367 19.655 2.2386 48.394 1e-5 87.625-39.231 87.625-87.625-3.1e-4 -31.581-16.995-60.719-44.484-76.268z" display="none" fill="url(#linearGradient23463)"/>
+  <path d="m105.5 24.43c-48.394-1.5e-5 -87.625 39.231-87.625 87.625 0.0174 20.443 7.1818 40.236 20.253 55.954 0.2523-0.42224 0.53629-0.82423 0.85783-1.2061 4.892-5.8104 10.427-10.214 18.946-19.252 3.7871-4.0176 6.3412 15.63 7.6435 14.309 1.3243-1.3439 0.1473-19.001 3.5062-24.674 6.0563-10.228 10.733-18.067 22.336-30.607 2.8443-3.0741 5.5333 11.223 6.8063 9.2361 1.1421-1.7823-0.26941-18.641 1.5663-23.773 4.8819-13.647 3.3631-13.21 15.582-31.378 2.098-3.1195 6.496 7.9402 7.2151 6.3268 0.70126-1.5734-0.84173-11.131-0.67179-15.805 0.37161-3.1498 3.6036-13.059 7.7055-23.367-7.8432-2.2472-15.962-3.3881-24.12-3.3895zm43.142 11.356c5.5662 61.595-18.426 120.7-62.796 161.65 6.446 1.4857 13.04 2.2367 19.655 2.2386 48.394 1e-5 87.625-39.231 87.625-87.625-3.1e-4 -31.581-16.995-60.719-44.484-76.268z" fill="url(#linearGradient6949)"/>
+ </g>
+<g transform="matrix(4.946 0 0 4.946 -9.798 -9.7984)">
+  <path transform="translate(-5.5496 -57.412)" d="m148.16 59.393c-7.7098 9.3985-19.951 42.888-20.696 49.204-0.16994 4.6737 1.3731 14.231 0.67182 15.805-0.71909 1.6134-5.117-9.4461-7.2151-6.3266-12.219 18.168-10.7 17.731-15.582 31.378-1.8357 5.1315-0.42447 21.99-1.5666 23.773-1.273 1.9866-3.962-12.31-6.8063-9.236-11.603 12.54-16.279 20.379-22.336 30.607-3.3589 5.6725-2.1817 23.33-3.506 24.674-1.3023 1.3215-3.8566-18.326-7.6437-14.309-8.5193 9.038-14.054 13.441-18.946 19.252-5.1981 6.1739-0.78251 17.584-5.0672 35.383l0.1448 0.22073c77.447-50.308 101.52-127.16 107.61-181.19-0.68051 63.93-29.41 142.78-105.33 184.65l0.1127 0.17141c20.241-2.181 22.307 10.458 44.562-4.2837 55.792-48.277 81.856-124.29 61.593-199.78z" display="none" fill="url(#linearGradient903)"/>
+  <path transform="translate(-5.5498 -57.412)" d="m148.16 59.393c-7.7098 9.3985-19.951 42.888-20.696 49.204-0.16994 4.6737 1.3731 14.231 0.67182 15.805-0.71909 1.6134-5.117-9.4461-7.2151-6.3266-12.219 18.168-10.7 17.731-15.582 31.378-1.8357 5.1315-0.42447 21.99-1.5666 23.773-1.273 1.9866-3.962-12.31-6.8063-9.236-11.603 12.54-16.279 20.379-22.336 30.607-3.3589 5.6725-2.1817 23.33-3.506 24.674-1.3023 1.3215-3.8566-18.326-7.6437-14.309-8.5193 9.038-14.054 13.441-18.946 19.252-5.1981 6.1739-0.78251 17.584-5.0672 35.383l0.1448 0.22073c77.447-50.308 101.52-127.16 107.61-181.19-0.68051 63.93-29.41 142.78-105.33 184.65l0.1127 0.17141c20.241-2.181 22.307 10.458 44.562-4.2837 55.792-48.277 81.856-124.29 61.593-199.78z" fill="url(#linearGradient918)"/>
+ </g>
+    </g>
+    <text x="180" y="55" class="node-label" text-anchor="middle">Host Application</text>
+    <text x="180" y="78" class="sub-label" text-anchor="middle">MCP Client (LibreChat)</text>
+  </g>
+  <g transform="translate(110, 540)">
+    <rect width="300" height="110" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="50" y="60" font-size="24" text-anchor="middle">✨</text>
+    <text x="180" y="62" class="node-label" text-anchor="middle">LLM Models</text>
+    <text x="180" y="86" class="sub-label" text-anchor="middle">e.g. GPT-5.4, Claude Sonnet 4.6</text>
+  </g>
+  <g transform="translate(555, 200)">
+    <rect width="380" height="460" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="2" filter="url(#shadow)"/>
+    <rect width="380" height="40" rx="8 8 0 0" fill="#eff6ff" stroke="none"/>
+    <text x="190" y="26" class="node-label" text-anchor="middle" fill="#1e40af">Power BI MCP Server</text>
+    <rect x="20" y="60" width="80" height="24" rx="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+    <text x="60" y="77" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb">FastMCP</text>
+    <text x="190" y="110" class="sub-label" text-anchor="middle" font-weight="600">Available Tools</text>
+    <rect x="40" y="130" width="300" height="40" rx="6" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="60" y="155" class="tool-text">⚙ powerbi_list_workspaces()</text>
+    <rect x="40" y="190" width="300" height="40" rx="6" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="60" y="215" class="tool-text">⚙ get_workspace_id()</text>
+    <rect x="40" y="250" width="300" height="40" rx="6" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="60" y="275" class="tool-text">⚙ list_datasets_in_workspace()</text>
+    <rect x="40" y="310" width="300" height="40" rx="6" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="60" y="335" class="tool-text">⚙ get_dataset_details()</text>
+    <rect x="40" y="370" width="300" height="40" rx="6" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="60" y="395" class="tool-text">⚙ execute_dax_query()</text>
+  </g>
+  <g transform="translate(1000, 150) scale(0.95)">
+    <rect x="190" y="20" width="340" height="480" rx="14" fill="#ffffff" stroke="#dcfce7" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect x="190" y="20" width="340" height="480" rx="14" fill="none" stroke="#16a34a" stroke-width="1" stroke-dasharray="8,4"/>
+    <g transform="translate(210, 35) scale(0.16)">
+
+<g clip-path="url(#clip0_1263_124590)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M10.496 176.634L6.74669 190.356C5.34937 194.746 3.39205 201.194 2.33606 206.932C0.832069 210.9 0.0107422 215.204 0.0107422 219.7C0.0107422 238.239 14.016 253.502 32.0212 255.497C37.0878 256.228 42.8211 256.19 49.2477 255.246L78.7728 251.172C86.1967 250.148 92.2927 244.788 94.266 237.556L114.586 162.922L10.496 176.634Z" fill="url(#paint0_linear_1263_124590)"/>
+<path d="M39.2942 180.17C8.17444 184.991 1.78516 208.474 1.78516 208.474L31.5876 98.9708L187.314 77.9043L166.077 155.04C164.973 159.173 161.501 162.341 157.197 162.997L156.328 163.141L38.4195 180.32L39.2942 180.17Z" fill="url(#paint1_linear_1263_124590)"/>
+<path d="M39.2942 180.17C8.17444 184.991 1.78516 208.474 1.78516 208.474L31.5876 98.9708L187.314 77.9043L166.077 155.04C164.973 159.173 161.501 162.341 157.197 162.997L156.328 163.141L38.4195 180.32L39.2942 180.17Z" fill="url(#paint2_linear_1263_124590)" fill-opacity="0.8"/>
+<path d="M56.9532 110.303L229.352 84.8367C233.453 84.2767 236.776 81.274 237.821 77.3434L255.613 12.9546C255.858 12.0799 255.986 11.1572 255.986 10.2079C255.986 4.57063 251.421 0 245.778 0C245.341 0 244.904 0.0266665 244.482 0.0799994L79.9824 24.3891C62.1158 27.2585 47.6893 40.437 43.0067 57.6262L19.2842 143.604C24.0468 126.212 26.9748 115.727 56.9532 110.303Z" fill="url(#paint3_linear_1263_124590)"/>
+<path d="M56.9532 110.303L229.352 84.8367C233.453 84.2767 236.776 81.274 237.821 77.3434L255.613 12.9546C255.858 12.0799 255.986 11.1572 255.986 10.2079C255.986 4.57063 251.421 0 245.778 0C245.341 0 244.904 0.0266665 244.482 0.0799994L79.9824 24.3891C62.1158 27.2585 47.6893 40.437 43.0067 57.6262L19.2842 143.604C24.0468 126.212 26.9748 115.727 56.9532 110.303Z" fill="url(#paint4_linear_1263_124590)"/>
+<path d="M56.9532 110.303L229.352 84.8367C233.453 84.2767 236.776 81.274 237.821 77.3434L255.613 12.9546C255.858 12.0799 255.986 11.1572 255.986 10.2079C255.986 4.57063 251.421 0 245.778 0C245.341 0 244.904 0.0266665 244.482 0.0799994L79.9824 24.3891C62.1158 27.2585 47.6893 40.437 43.0067 57.6262L19.2842 143.604C24.0468 126.212 26.9748 115.727 56.9532 110.303Z" fill="url(#paint5_linear_1263_124590)"/>
+<path d="M56.9532 110.303L229.352 84.8367C233.453 84.2767 236.776 81.274 237.821 77.3434L255.613 12.9546C255.858 12.0799 255.986 11.1572 255.986 10.2079C255.986 4.57063 251.421 0 245.778 0C245.341 0 244.904 0.0266665 244.482 0.0799994L79.9824 24.3891C62.1158 27.2585 47.6893 40.437 43.0067 57.6262L19.2842 143.604C24.0468 126.212 26.9748 115.727 56.9532 110.303Z" fill="url(#paint6_linear_1263_124590)"/>
+<path d="M56.9532 110.303L229.352 84.8367C233.453 84.2767 236.776 81.274 237.821 77.3434L255.613 12.9546C255.858 12.0799 255.986 11.1572 255.986 10.2079C255.986 4.57063 251.421 0 245.778 0C245.341 0 244.904 0.0266665 244.482 0.0799994L79.9824 24.3891C62.1158 27.2585 47.6893 40.437 43.0067 57.6262L19.2842 143.604C24.0468 126.212 26.9748 115.727 56.9532 110.303Z" fill="url(#paint7_linear_1263_124590)"/>
+<path d="M56.9532 110.303L229.352 84.8367C233.453 84.2767 236.776 81.274 237.821 77.3434L255.613 12.9546C255.858 12.0799 255.986 11.1572 255.986 10.2079C255.986 4.57063 251.421 0 245.778 0C245.341 0 244.904 0.0266665 244.482 0.0799994L79.9824 24.3891C62.1158 27.2585 47.6893 40.437 43.0067 57.6262L19.2842 143.604C24.0468 126.212 26.9748 115.727 56.9532 110.303Z" fill="url(#paint8_linear_1263_124590)"/>
+<path d="M56.9532 110.303L229.352 84.8367C233.453 84.2767 236.776 81.274 237.821 77.3434L255.613 12.9546C255.858 12.0799 255.986 11.1572 255.986 10.2079C255.986 4.57063 251.421 0 245.778 0C245.341 0 244.904 0.0266665 244.482 0.0799994L79.9824 24.3891C62.1158 27.2585 47.6893 40.437 43.0067 57.6262L19.2842 143.604C24.0468 126.212 26.9748 115.727 56.9532 110.303Z" fill="url(#paint9_linear_1263_124590)" fill-opacity="0.4"/>
+<path d="M56.9527 110.309C31.9876 114.827 25.7903 122.869 21.6623 135.472L1.78516 208.49C1.78516 208.49 8.13711 185.242 38.8782 180.271L156.333 163.162L157.203 163.018C161.507 162.362 164.979 159.189 166.083 155.061L183.554 91.6055L56.9581 110.309H56.9527Z" fill="url(#paint10_linear_1263_124590)"/>
+<path d="M56.9527 110.309C31.9876 114.827 25.7903 122.869 21.6623 135.472L1.78516 208.49C1.78516 208.49 8.13711 185.242 38.8782 180.271L156.333 163.162L157.203 163.018C161.507 162.362 164.979 159.189 166.083 155.061L183.554 91.6055L56.9581 110.309H56.9527Z" fill="url(#paint11_linear_1263_124590)" fill-opacity="0.2"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M38.8798 180.272C12.9013 184.475 4.36804 201.68 2.33606 206.923C0.832069 210.901 0.0107422 215.205 0.0107422 219.701C0.0107422 238.24 14.016 253.504 32.0212 255.498C37.0878 256.229 42.8211 256.192 49.2477 255.248L78.7728 251.173C86.1967 250.149 92.2927 244.789 94.266 237.557L112.789 169.51L38.8851 180.278L38.8798 180.272Z" fill="url(#paint12_linear_1263_124590)"/>
+</g>
+
+
+    </g>
+
+
+
+
+<!-- Outer panel background -->
+
+<!-- Outer dashed border -->
+
+
+<!-- Fabric logo icon (stylized F shape) -->
+
+
+<!-- Title -->
+<text x="258" y="63" style="fill:#111827;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, sans-serif;font-size:18px;font-weight:700;text-anchor:start;dominant-baseline:auto">Microsoft Fabric</text>
+
+<!-- Workspaces section (outer inner box) -->
+<rect x="204" y="85" width="292" height="400" rx="10" fill="#ecfdf5" style="fill:rgb(236, 253, 245);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+<rect x="204" y="85" width="292" height="400" rx="10" style="fill:none;stroke:rgb(45, 212, 191);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-dasharray:6px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<!-- Workspaces row -->
+<!-- People/workspaces icon -->
+<g transform="translate(220, 100)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+  <!-- Two person icon -->
+  <circle cx="8" cy="6" r="4" fill="none" stroke="#374151" stroke-width="1.5" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M2 18 Q2 13 8 13 Q14 13 14 18" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" mask="url(#imagine-text-gaps-9a8pxd)" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="17" cy="6" r="3" fill="none" stroke="#374151" stroke-width="1.3" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M13 18 Q13 14 17 14 Q21 14 21 18" fill="none" stroke="#374151" stroke-width="1.3" stroke-linecap="round" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.3px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<text x="252" y="117" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, sans-serif;font-size:15px;font-weight:500;text-anchor:start;dominant-baseline:auto">Workspaces</text>
+
+<!-- Inner box for sub-items -->
+<rect x="218" y="130" width="264" height="340" rx="8" fill="#f8fffc" style="fill:rgb(248, 255, 252);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+<rect x="218" y="130" width="264" height="340" rx="8" style="fill:none;stroke:rgb(94, 234, 212);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-dasharray:6px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<!-- Models, reports, etc. row -->
+<!-- Bar chart icon -->
+<g transform="translate(232, 148)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+  <rect x="0" y="8" width="5" height="10" rx="1" fill="#374151" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="7" y="3" width="5" height="15" rx="1" fill="#374151" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="14" y="5" width="5" height="13" rx="1" fill="#374151" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<text x="262" y="163" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, sans-serif;font-size:15px;font-weight:400;text-anchor:start;dominant-baseline:auto">Models, reports, etc.</text>
+
+<!-- Divider -->
+<line x1="232" y1="180" x2="468" y2="180" stroke="#bae6d4" stroke-width="0.8" style="fill:rgb(0, 0, 0);stroke:rgb(186, 230, 212);color:rgb(0, 0, 0);stroke-width:0.8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<!-- Data row -->
+<!-- Cylinder icon -->
+<g transform="translate(232, 190)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+  <ellipse cx="10" cy="4" rx="10" ry="4" fill="none" stroke="#374151" stroke-width="1.4" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="0" y="4" width="20" height="14" fill="none" style="fill:none;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="0" y1="4" x2="0" y2="18" stroke="#374151" stroke-width="1.4" style="fill:rgb(0, 0, 0);stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="20" y1="4" x2="20" y2="18" stroke="#374151" stroke-width="1.4" style="fill:rgb(0, 0, 0);stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <ellipse cx="10" cy="18" rx="10" ry="4" fill="none" stroke="#374151" stroke-width="1.4" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<text x="262" y="208" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, sans-serif;font-size:15px;font-weight:400;text-anchor:start;dominant-baseline:auto">Data</text>
+
+<!-- Divider -->
+<line x1="232" y1="225" x2="468" y2="225" stroke="#bae6d4" stroke-width="0.8" style="fill:rgb(0, 0, 0);stroke:rgb(186, 230, 212);color:rgb(0, 0, 0);stroke-width:0.8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<!-- Configuration row -->
+<!-- Gear icon -->
+<g transform="translate(232, 235)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+  <circle cx="10" cy="11" r="4" fill="none" stroke="#374151" stroke-width="1.4" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M10 2 L10 5 M10 17 L10 20 M2 11 L5 11 M15 11 L18 11 M4.1 4.1 L6.2 6.2 M13.8 13.8 L15.9 15.9 M15.9 4.1 L13.8 6.2 M6.2 13.8 L4.1 15.9" fill="none" stroke="#374151" stroke-width="1.4" stroke-linecap="round" mask="url(#imagine-text-gaps-9a8pxd)" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<text x="262" y="253" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, sans-serif;font-size:15px;font-weight:400;text-anchor:start;dominant-baseline:auto">Configuration</text>
+
+<!-- Divider -->
+<line x1="232" y1="270" x2="468" y2="270" stroke="#bae6d4" stroke-width="0.8" style="fill:rgb(0, 0, 0);stroke:rgb(186, 230, 212);color:rgb(0, 0, 0);stroke-width:0.8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<!-- Metadata row -->
+<!-- Document icon -->
+<g transform="translate(232, 280)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+  <path d="M3 1 L13 1 L17 6 L17 21 L3 21 Z" fill="none" stroke="#374151" stroke-width="1.4" stroke-linejoin="round" mask="url(#imagine-text-gaps-9a8pxd)" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:round;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M13 1 L13 6 L17 6" fill="none" stroke="#374151" stroke-width="1.4" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="6" y1="10" x2="14" y2="10" stroke="#374151" stroke-width="1.2" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.2px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="6" y1="14" x2="12" y2="14" stroke="#374151" stroke-width="1.2" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.2px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<text x="262" y="298" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, sans-serif;font-size:15px;font-weight:400;text-anchor:start;dominant-baseline:auto">Metadata</text>
+
+<!-- Divider -->
+<line x1="232" y1="315" x2="468" y2="315" stroke="#bae6d4" stroke-width="0.8" style="fill:rgb(0, 0, 0);stroke:rgb(186, 230, 212);color:rgb(0, 0, 0);stroke-width:0.8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<!-- Permissions row -->
+<!-- Person with lock icon -->
+<g transform="translate(232, 325)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+  <circle cx="7" cy="6" r="4" fill="none" stroke="#374151" stroke-width="1.4" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M1 21 Q1 15 7 15 Q10 15 12 17" fill="none" stroke="#374151" stroke-width="1.4" stroke-linecap="round" mask="url(#imagine-text-gaps-9a8pxd)" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.4px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="14" y="14" width="7" height="6" rx="1.5" fill="none" stroke="#374151" stroke-width="1.3" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M15.5 14 Q15.5 11 17.5 11 Q19.5 11 19.5 14" fill="none" stroke="#374151" stroke-width="1.3" style="fill:none;stroke:#374151;color:rgb(0, 0, 0);stroke-width:1.3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="17.5" cy="17" r="1" fill="#374151" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+<text x="262" y="343" style="fill:#374151;stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, sans-serif;font-size:15px;font-weight:400;text-anchor:start;dominant-baseline:auto">Permissions</text>
+
+
+  </g>
+  <line x1="260" y1="260" x2="260" y2="330" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)"/>
+  <line x1="260" y1="470" x2="260" y2="540" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)"/>
+  <path d="M 410,400 L 555,400" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)"/>
+  <rect x="435" y="385" width="100" height="30" rx="4" fill="#ffffff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="485" y="405" text-anchor="middle" font-size="12" font-weight="700" fill="#2563eb">MCP Protocol</text>
+  <path d="M 935,430 L 1180,430" stroke="#16a34a" stroke-width="3" marker-end="url(#arrow-green)"/>
+  <rect x="1000" y="415" width="110" height="30" rx="4" fill="#ffffff" stroke="#bbf7d0" stroke-width="1"/>
+  <text x="1055" y="435" text-anchor="middle" font-size="12" font-weight="700" fill="#16a34a">Microsoft APIs</text>
+  <g transform="translate(60, 830)">
+    <text x="0" y="0" class="sub-label" font-weight="700" fill="#111827">Legend:</text>
+    <line x1="80" y1="-5" x2="120" y2="-5" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)"/>
+    <text x="125" y="0" class="sub-label">Client-side Flow</text>
+    <line x1="250" y1="-5" x2="290" y2="-5" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+    <text x="295" y="0" class="sub-label">MCP Protocol</text>
+    <line x1="420" y1="-5" x2="460" y2="-5" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+    <text x="465" y="0" class="sub-label">Microsoft APIs</text>
+  </g>
+</svg>
