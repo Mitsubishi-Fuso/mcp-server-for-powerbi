@@ -4,6 +4,10 @@ Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI wo
 
 **🔐 Now with OAuth/Entra ID support!** Seamlessly integrates with LibreChat and other OAuth-enabled clients using JWT validation and On-Behalf-Of flow.
 
+## Architecture Overview
+
+![Architecture diagram for PBI MCP Server](docs/assets/mcp-architecture.svg)
+
 ## Features
 | Tool | Purpose |
 |------|---------|
