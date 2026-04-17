@@ -1,5 +1,9 @@
 # MCP Server for Power BI
 
+[![CodeQL](https://github.com/Mitsubishi-Fuso/mcp-server-for-powerbi/actions/workflows/codeql.yml/badge.svg)](https://github.com/Mitsubishi-Fuso/mcp-server-for-powerbi/actions/workflows/codeql.yml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Mitsubishi-Fuso/mcp-server-for-powerbi)
+[![MIT License](https://img.shields.io/badge/license-MIT-green)](https://github.com/Mitsubishi-Fuso/mcp-server-for-powerbi/blob/main/LICENSE)
+
 Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI workspaces and semantic models, and for executing ad‑hoc DAX queries. 
 
 **🔐 Now with OAuth/Entra ID support!** Seamlessly integrates with LibreChat and other OAuth-enabled clients using JWT validation and On-Behalf-Of flow.
