@@ -4,7 +4,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Mitsubishi-Fuso/mcp-server-for-powerbi)
 [![MIT License](https://img.shields.io/badge/license-MIT-green)](https://github.com/Mitsubishi-Fuso/mcp-server-for-powerbi/blob/main/LICENSE)
 
-Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI workspaces and semantic models, and for executing ad‑hoc DAX queries. 
+Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI workspaces and semantic models, and for executing ad‑hoc DAX queries.
 
 **🔐 Now with OAuth/Entra ID support!** Seamlessly integrates with LibreChat and other OAuth-enabled clients using JWT validation and On-Behalf-Of flow.
 
@@ -18,7 +18,7 @@ Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI wo
 | `powerbi_list_workspaces()` | List workspaces the signed-in user can access. |
 | `get_workspace_id(workspace_name)` | Get the workspace ID for a given workspace name. |
 | `list_datasets_in_workspace(workspace_id)` | Enumerate datasets in a workspace. |
-| `get_dataset_details(workspace_id, dataset_id)` | Retrieve dataset (semantic model) metadata and definition via Fabric. |
+| `get_dataset_details(workspace_id, dataset_id)` | Retrieve dataset (semantic model) metadata and structure via DAX introspection |
 | `execute_dax_query(workspace_id, dataset_id, dax_query)` | Run a DAX query against a dataset using the Execute Queries API. |
 
 ## Transport Modes
