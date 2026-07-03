@@ -2,6 +2,7 @@
 MCP Server for Power BI with Streamable HTTP Transport and OAuth
 Uses modern streamable-http transport with Entra ID authentication for Azure/LibreChat deployment
 """
+
 import os
 import sys
 import logging
@@ -29,11 +30,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.tools import FunctionTool
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%dT%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%dT%H:%M:%S")
 logger = logging.getLogger(__name__)
 
 # ── Configuration ──────────────────────────────────────────────────────────
@@ -94,8 +91,7 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
             raise
         except Exception as exc:
             raise ToolError(
-                f"Failed to acquire Power BI token via OBO. "
-                f"Requested scope: {requested_scopes[0]}. Details: {str(exc)}"
+                f"Failed to acquire Power BI token via OBO. Requested scope: {requested_scopes[0]}. Details: {str(exc)}"
             )
 
     return PowerBIClient(token=user_token, token_provider=token_provider)
@@ -111,38 +107,30 @@ async def revoke_handler(request: Request):
     """Token revocation endpoint for LibreChat compatibility"""
     # LibreChat calls this when disconnecting, just return success
     logger.info("Token revocation requested (no-op)")
-    return JSONResponse(
-        status_code=200,
-        content={"success": True, "message": "Token revocation acknowledged"}
-    )
+    return JSONResponse(status_code=200, content={"success": True, "message": "Token revocation acknowledged"})
 
 
 async def mcp_handler(request: Request):
     """MCP endpoint with authentication and OBO flow"""
-    
+
     # Get authenticated user
     user = get_authenticated_user(request)
     if not user:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "unauthorized", "message": "Authentication required"}
-        )
-    
+        return JSONResponse(status_code=401, content={"error": "unauthorized", "message": "Authentication required"})
+
     logger.info(f"MCP request from user: {user.preferred_username or user.oid}")
-    
-    context_token = set_request_scoped_powerbi_client_factory(
-        lambda: create_powerbi_client(request)
-    )
-    
+
+    context_token = set_request_scoped_powerbi_client_factory(lambda: create_powerbi_client(request))
+
     try:
         # Parse MCP JSON-RPC request
         body = await request.json()
         method = body.get("method")
         params = body.get("params", {})
         request_id = body.get("id")
-        
+
         logger.info(f"MCP request: method={method}, id={request_id}")
-        
+
         # Handle MCP notifications (no response needed)
         if request_id is None:
             if method == "notifications/initialized":
@@ -154,33 +142,26 @@ async def mcp_handler(request: Request):
             else:
                 logger.warning(f"Unknown notification: {method}")
                 return JSONResponse(content={})
-        
+
         # Handle MCP methods
         if method == "ping":
             # Respond to ping/keep-alive requests
-            return JSONResponse(content={
-                "jsonrpc": "2.0",
-                "result": {},
-                "id": request_id
-            })
-        
+            return JSONResponse(content={"jsonrpc": "2.0", "result": {}, "id": request_id})
+
         elif method == "initialize":
             # Return server capabilities
-            return JSONResponse(content={
-                "jsonrpc": "2.0",
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {}
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "mcp-server-for-powerbi", "version": "0.2.0"},
                     },
-                    "serverInfo": {
-                        "name": "mcp-server-for-powerbi",
-                        "version": "0.2.0"
-                    }
-                },
-                "id": request_id
-            })
-        
+                    "id": request_id,
+                }
+            )
+
         elif method == "tools/list":
             # Build tool list dynamically from FastMCP registry to avoid schema drift.
             tools_by_key = await mcp.get_tools()
@@ -188,29 +169,28 @@ async def mcp_handler(request: Request):
             for tool_key in sorted(tools_by_key.keys()):
                 tool = tools_by_key[tool_key]
                 mcp_tool = tool.to_mcp_tool(include_fastmcp_meta=False)
-                tools_payload.append({
-                    "name": mcp_tool.name,
-                    "description": mcp_tool.description or "",
-                    "inputSchema": mcp_tool.inputSchema or {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                    },
-                })
+                tools_payload.append(
+                    {
+                        "name": mcp_tool.name,
+                        "description": mcp_tool.description or "",
+                        "inputSchema": mcp_tool.inputSchema
+                        or {
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                        },
+                    }
+                )
 
-            return JSONResponse(content={
-                "jsonrpc": "2.0",
-                "result": {"tools": tools_payload},
-                "id": request_id
-            })
-        
+            return JSONResponse(content={"jsonrpc": "2.0", "result": {"tools": tools_payload}, "id": request_id})
+
         elif method == "tools/call":
             # Execute a tool
             tool_name = params.get("name")
             tool_args = params.get("arguments", {})
-            
+
             logger.info(f"Calling tool: {tool_name} with args: {tool_args}")
-            
+
             # Get the tool info from mcp
             tool_info = await mcp.get_tool(tool_name)
             if not tool_info:
@@ -218,31 +198,30 @@ async def mcp_handler(request: Request):
                     status_code=404,
                     content={
                         "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32601,
-                            "message": f"Tool not found: {tool_name}"
-                        },
-                        "id": request_id
-                    }
+                        "error": {"code": -32601, "message": f"Tool not found: {tool_name}"},
+                        "id": request_id,
+                    },
                 )
-            
+
             # Execute the tool
             try:
                 # Call the tool's function
                 from fastmcp import Context
+
                 ctx = Context(fastmcp=mcp)
-                
+
                 # tool_info.fn is the actual function
                 if isinstance(tool_info, FunctionTool):
                     # Check if it's async or sync
                     import inspect
+
                     if inspect.iscoroutinefunction(tool_info.fn):
                         result = await tool_info.fn(ctx, **tool_args)
                     else:
                         result = tool_info.fn(ctx, **tool_args)
                 else:
                     raise ToolError(f"Tool {tool_name} is not callable")
-                
+
                 # Check for claims challenge
                 claims_challenge = getattr(request.state, "claims_challenge_holder", {}).get("challenge")
                 if claims_challenge:
@@ -261,61 +240,57 @@ async def mcp_handler(request: Request):
                                     "errorDescription": claims_challenge.error_description,
                                     "traceId": claims_challenge.trace_id,
                                     "correlationId": claims_challenge.correlation_id,
-                                }
+                                },
                             },
-                            "id": request_id
-                        }
+                            "id": request_id,
+                        },
                     )
-                
+
                 # Return tool result
-                return JSONResponse(content={
-                    "jsonrpc": "2.0",
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": json.dumps(result, indent=2) if not isinstance(result, str) else result
-                            }
-                        ]
-                    },
-                    "id": request_id
-                })
-            
+                return JSONResponse(
+                    content={
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": json.dumps(result, indent=2) if not isinstance(result, str) else result,
+                                }
+                            ]
+                        },
+                        "id": request_id,
+                    }
+                )
+
             except Exception as tool_error:
                 logger.error(f"Tool execution error: {tool_error}", exc_info=True)
                 return JSONResponse(
                     status_code=500,
                     content={
                         "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32000,
-                            "message": f"Tool execution failed: {str(tool_error)}"
-                        },
-                        "id": request_id
-                    }
+                        "error": {"code": -32000, "message": f"Tool execution failed: {str(tool_error)}"},
+                        "id": request_id,
+                    },
                 )
-        
+
         else:
             # Unsupported method
             return JSONResponse(
                 status_code=400,
                 content={
                     "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32601,
-                        "message": f"Method not found: {method}"
-                    },
-                    "id": request_id
-                }
+                    "error": {"code": -32601, "message": f"Method not found: {method}"},
+                    "id": request_id,
+                },
             )
-    
+
     except ClaimsChallengeError as e:
         logger.warning(f"Claims challenge: {e.info.error_description}")
         try:
-            req_id = body.get("id") if 'body' in locals() else None
+            req_id = body.get("id") if "body" in locals() else None
         except Exception:
             req_id = None
-        
+
         return JSONResponse(
             status_code=401,
             headers={"WWW-Authenticate": e.info.www_authenticate},
@@ -331,25 +306,20 @@ async def mcp_handler(request: Request):
                         "errorDescription": e.info.error_description,
                         "traceId": e.info.trace_id,
                         "correlationId": e.info.correlation_id,
-                    }
+                    },
                 },
-                "id": req_id
-            }
+                "id": req_id,
+            },
         )
     except Exception as e:
         logger.error(f"MCP handler error: {e}", exc_info=True)
         try:
-            req_id = body.get("id") if 'body' in locals() else None
+            req_id = body.get("id") if "body" in locals() else None
         except Exception:
             req_id = None
-        
+
         return JSONResponse(
-            status_code=500,
-            content={
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
-                "id": req_id
-            }
+            status_code=500, content={"jsonrpc": "2.0", "error": {"code": -32603, "message": str(e)}, "id": req_id}
         )
     finally:
         reset_request_scoped_powerbi_client_factory(context_token)
@@ -372,17 +342,18 @@ def create_app() -> Starlette:
         audience=AUDIENCE,
         required_scopes=REQUIRED_SCOPES,
         required_roles=REQUIRED_ROLES,
-        log_level=LOG_LEVEL
+        log_level=LOG_LEVEL,
     )
-    
+
     # Wrapper for /mcp route that applies authentication
     async def authenticated_mcp_handler(request: Request):
         """MCP handler with authentication check"""
+
         async def call_next(req):
             return await mcp_handler(req)
-        
+
         return await auth_middleware.dispatch(request, call_next)
-    
+
     # CORS and Auth middleware stack
     middleware = [
         Middleware(
@@ -396,7 +367,7 @@ def create_app() -> Starlette:
             expose_headers=["Mcp-Session-Id"],
         )
     ]
-    
+
     # Create app with routes
     app = Starlette(
         debug=(LOG_LEVEL == "debug"),
@@ -405,9 +376,9 @@ def create_app() -> Starlette:
             Route("/mcp", authenticated_mcp_handler, methods=["POST", "GET", "DELETE"]),
             Route("/revoke", revoke_handler, methods=["POST"]),
         ],
-        middleware=middleware
+        middleware=middleware,
     )
-    
+
     return app
 
 
@@ -428,15 +399,10 @@ def main():
             "the Power BI API; this can fail when the token audience does not match."
         )
     logger.info(f"Listening on http://0.0.0.0:{PORT}")
-    
+
     app = create_app()
-    
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=PORT,
-        log_level=LOG_LEVEL
-    )
+
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level=LOG_LEVEL)
 
 
 if __name__ == "__main__":

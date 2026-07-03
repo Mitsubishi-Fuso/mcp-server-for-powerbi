@@ -33,6 +33,7 @@ def reset_request_scoped_powerbi_client_factory(
     """Reset request-scoped PowerBIClient factory to previous state."""
     _request_scoped_client_factory.reset(token)
 
+
 class PowerBIClient:
     def __init__(
         self,
@@ -80,8 +81,7 @@ class PowerBIClient:
                 raise
             except ClaimsChallengeError as exc:
                 raise ToolError(
-                    "Claims challenge required for Power BI token. "
-                    f"WWW-Authenticate: {exc.info.www_authenticate}"
+                    f"Claims challenge required for Power BI token. WWW-Authenticate: {exc.info.www_authenticate}"
                 )
             except Exception as exc:
                 raise ToolError(f"Failed to get Power BI access token: {str(exc)}")
@@ -104,21 +104,25 @@ class PowerBIClient:
 
         # Build context-aware suggestions based on status code and path
         if status_code == 401:
-            suggestions.extend([
-                "Verify the Power BI access token is valid and not expired",
-                "Check if the required permission scope is present in the token",
-                "Ensure the token has the necessary API permissions (Dataset.ReadWrite.All or Dataset.Read.All)"
-            ])
+            suggestions.extend(
+                [
+                    "Verify the Power BI access token is valid and not expired",
+                    "Check if the required permission scope is present in the token",
+                    "Ensure the token has the necessary API permissions (Dataset.ReadWrite.All or Dataset.Read.All)",
+                ]
+            )
         elif status_code == 403:
             if "TokenExpired" in error_code:
                 suggestions.append("The access token has expired - please obtain a new token")
             else:
-                suggestions.extend([
-                    "Verify you have access to the requested workspace",
-                    "Check if you are a member or admin of the workspace",
-                    "Ensure you have the required permissions for this operation",
-                    "The authorization header might be incorrect - check for typos"
-                ])
+                suggestions.extend(
+                    [
+                        "Verify you have access to the requested workspace",
+                        "Check if you are a member or admin of the workspace",
+                        "Ensure you have the required permissions for this operation",
+                        "The authorization header might be incorrect - check for typos",
+                    ]
+                )
         elif status_code == 404:
             if "/datasets/" in path:
                 suggestions.append("The specified dataset ID does not exist or you don't have access to it")
@@ -127,11 +131,13 @@ class PowerBIClient:
             else:
                 suggestions.append("The requested resource was not found")
         elif status_code == 400:
-            suggestions.extend([
-                "Check if all required parameters are provided",
-                "Verify parameter formats (IDs should be valid UUIDs)",
-                "For DAX queries, check syntax and table/column references"
-            ])
+            suggestions.extend(
+                [
+                    "Check if all required parameters are provided",
+                    "Verify parameter formats (IDs should be valid UUIDs)",
+                    "For DAX queries, check syntax and table/column references",
+                ]
+            )
         elif status_code == 429:
             suggestions.append("Rate limit exceeded - please wait before retrying (limit: 120 requests per minute)")
 
@@ -193,9 +199,9 @@ class PowerBIClient:
             return r.json()
         except ValueError:
             raise ToolError(
-                "Invalid response: The Power BI API returned a non-JSON response. "
-                "This might indicate a service issue."
+                "Invalid response: The Power BI API returned a non-JSON response. This might indicate a service issue."
             )
+
 
 # DAX INFO.VIEW.* introspection queries. These run through the Power BI Execute
 # Queries API.
@@ -282,9 +288,7 @@ def _get_semantic_model_via_dax_introspection(
     Note this is model structure, not a full serialized TMSL definition
     (partitions/M source, roles/RLS, and data sources are not included).
     """
-    tables_rows, err = _run_info_query(
-        client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["tables"]
-    )
+    tables_rows, err = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["tables"])
     if tables_rows is None:
         logger.warning(
             "DAX introspection failed on tables query for dataset %s in workspace %s: %s",
@@ -296,15 +300,9 @@ def _get_semantic_model_via_dax_introspection(
 
     # Columns/measures/relationships are best-effort; an empty measures result is
     # legitimate (model may have none). A hard failure here is logged but not fatal.
-    columns_rows, cerr = _run_info_query(
-        client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["columns"]
-    )
-    measures_rows, merr = _run_info_query(
-        client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["measures"]
-    )
-    rel_rows, rerr = _run_info_query(
-        client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["relationships"]
-    )
+    columns_rows, cerr = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["columns"])
+    measures_rows, merr = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["measures"])
+    rel_rows, rerr = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["relationships"])
     for label, sub_err in (("columns", cerr), ("measures", merr), ("relationships", rerr)):
         if sub_err:
             logger.warning("DAX introspection %s query returned error: %s", label, sub_err)
@@ -373,6 +371,7 @@ def powerbi_list_workspaces(ctx: Context) -> Dict[str, Any]:
             )
         raise
 
+
 @mcp.tool
 def get_workspace_id(ctx: Context, workspace_name: str) -> str:
     """Get the workspace ID for a given workspace name.
@@ -399,10 +398,8 @@ def get_workspace_id(ctx: Context, workspace_name: str) -> str:
 
     # Workspace not found - provide helpful error message
     available_names = [ws.get("name", "Unknown") for ws in workspaces]
-    raise ToolError(
-        f"Workspace '{workspace_name}' not found. "
-        f"Available workspaces: {', '.join(available_names)}"
-    )
+    raise ToolError(f"Workspace '{workspace_name}' not found. Available workspaces: {', '.join(available_names)}")
+
 
 def _validate_uuid(value: str, param_name: str) -> None:
     """Validate that a string is a valid UUID format.
@@ -416,12 +413,11 @@ def _validate_uuid(value: str, param_name: str) -> None:
     """
     if not value or not value.strip():
         raise ToolError(
-            f"Missing required parameter: {param_name}\n"
-            f"Please provide a valid workspace/dataset ID (UUID format)."
+            f"Missing required parameter: {param_name}\nPlease provide a valid workspace/dataset ID (UUID format)."
         )
 
     # Basic UUID format validation (8-4-4-4-12 hexadecimal characters)
-    uuid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    uuid_pattern = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     if not re.match(uuid_pattern, value.strip()):
         raise ToolError(
             f"Invalid {param_name} format: '{value}'\n"
@@ -429,6 +425,7 @@ def _validate_uuid(value: str, param_name: str) -> None:
             f"Example: f089354e-8366-4e18-aea3-4cb4a3a50b48\n\n"
             f"Suggestion: Use 'get_workspace_id' tool to find the workspace ID by name."
         )
+
 
 @mcp.tool
 def list_datasets_in_workspace(ctx: Context, workspace_id: str) -> Dict[str, Any]:
@@ -444,6 +441,7 @@ def list_datasets_in_workspace(ctx: Context, workspace_id: str) -> Dict[str, Any
 
     client = PowerBIClient()
     return client.request("GET", f"/groups/{workspace_id.strip()}/datasets")
+
 
 @mcp.tool
 def get_dataset_details(ctx: Context, workspace_id: str, dataset_id: str) -> Dict[str, Any]:
@@ -485,6 +483,7 @@ def get_dataset_details(ctx: Context, workspace_id: str, dataset_id: str) -> Dic
 
     return data
 
+
 def _analyze_dax_error(error_msg: str, dax_query: str) -> list[str]:
     """Analyze DAX error and provide helpful suggestions.
 
@@ -500,65 +499,83 @@ def _analyze_dax_error(error_msg: str, dax_query: str) -> list[str]:
 
     # DAX syntax errors
     if "syntax" in error_lower or "parsing" in error_lower:
-        suggestions.extend([
-            "Check DAX syntax - ensure EVALUATE is used for table expressions",
-            "Verify parentheses and brackets are properly matched",
-            "Check function parameter count and types",
-            "DAX is case-insensitive for keywords but case-sensitive for object names"
-        ])
+        suggestions.extend(
+            [
+                "Check DAX syntax - ensure EVALUATE is used for table expressions",
+                "Verify parentheses and brackets are properly matched",
+                "Check function parameter count and types",
+                "DAX is case-insensitive for keywords but case-sensitive for object names",
+            ]
+        )
 
     # Table reference issues
-    if "table" in error_lower and ("not found" in error_lower or "doesn't exist" in error_lower or "cannot find" in error_lower):
-        suggestions.extend([
-            "Verify the table name exists in the dataset",
-            "Check table name spelling (table names are case-sensitive)",
-            "Use single quotes for table names with spaces: 'Sales Data'",
-            "If the table is from another model, check the relationship"
-        ])
+    if "table" in error_lower and (
+        "not found" in error_lower or "doesn't exist" in error_lower or "cannot find" in error_lower
+    ):
+        suggestions.extend(
+            [
+                "Verify the table name exists in the dataset",
+                "Check table name spelling (table names are case-sensitive)",
+                "Use single quotes for table names with spaces: 'Sales Data'",
+                "If the table is from another model, check the relationship",
+            ]
+        )
 
     # Column reference issues
-    if "column" in error_lower and ("not found" in error_lower or "doesn't exist" in error_lower or "cannot find" in error_lower):
-        suggestions.extend([
-            "Verify the column name exists in the specified table",
-            "Use TableName[ColumnName] syntax for column references",
-            "Check column name spelling (column names are case-sensitive)",
-            "Ensure you're referencing the correct table for this column"
-        ])
+    if "column" in error_lower and (
+        "not found" in error_lower or "doesn't exist" in error_lower or "cannot find" in error_lower
+    ):
+        suggestions.extend(
+            [
+                "Verify the column name exists in the specified table",
+                "Use TableName[ColumnName] syntax for column references",
+                "Check column name spelling (column names are case-sensitive)",
+                "Ensure you're referencing the correct table for this column",
+            ]
+        )
 
     # Query result limitations
     if "more than" in error_lower or "limit" in error_lower or "exceed" in error_lower:
-        suggestions.extend([
-            "The query exceeded Power BI limits (max 100,000 rows or 1,000,000 values)",
-            "Use TOPN() to limit the number of rows returned",
-            "Add filters to reduce the result set size",
-            "Consider aggregating data instead of returning raw rows"
-        ])
+        suggestions.extend(
+            [
+                "The query exceeded Power BI limits (max 100,000 rows or 1,000,000 values)",
+                "Use TOPN() to limit the number of rows returned",
+                "Add filters to reduce the result set size",
+                "Consider aggregating data instead of returning raw rows",
+            ]
+        )
 
     # Function errors
     if "function" in error_lower:
-        suggestions.extend([
-            "Verify the function name is spelled correctly",
-            "Check that the function exists in DAX (some Excel functions don't exist in DAX)",
-            "Verify the number and types of function arguments",
-            "Some functions require specific evaluation contexts"
-        ])
+        suggestions.extend(
+            [
+                "Verify the function name is spelled correctly",
+                "Check that the function exists in DAX (some Excel functions don't exist in DAX)",
+                "Verify the number and types of function arguments",
+                "Some functions require specific evaluation contexts",
+            ]
+        )
 
     # Relationship/filter context errors
     if "relationship" in error_lower or "filter" in error_lower or "context" in error_lower:
-        suggestions.extend([
-            "Check if required relationships exist between tables",
-            "Verify filter context is set up correctly",
-            "Consider using CALCULATE to modify filter context",
-            "Check for circular dependencies in relationships"
-        ])
+        suggestions.extend(
+            [
+                "Check if required relationships exist between tables",
+                "Verify filter context is set up correctly",
+                "Consider using CALCULATE to modify filter context",
+                "Check for circular dependencies in relationships",
+            ]
+        )
 
     # Dataset permission/configuration errors
     if "permission" in error_lower or "denied" in error_lower:
-        suggestions.extend([
-            "Verify you have read and build permissions on the dataset",
-            "Check if Row-Level Security (RLS) is blocking access",
-            "Ensure the dataset is published and accessible"
-        ])
+        suggestions.extend(
+            [
+                "Verify you have read and build permissions on the dataset",
+                "Check if Row-Level Security (RLS) is blocking access",
+                "Ensure the dataset is published and accessible",
+            ]
+        )
 
     # Tenant setting errors
     if "tenant" in error_lower or "admin" in error_lower:
@@ -569,14 +586,17 @@ def _analyze_dax_error(error_msg: str, dax_query: str) -> list[str]:
 
     # No specific error detected, provide general suggestions
     if not suggestions:
-        suggestions.extend([
-            "Verify the DAX query syntax is correct",
-            "Check all table and column references exist in the dataset",
-            "Ensure the query doesn't exceed Power BI limitations",
-            "Try a simpler query first to isolate the issue (e.g., EVALUATE TableName)"
-        ])
+        suggestions.extend(
+            [
+                "Verify the DAX query syntax is correct",
+                "Check all table and column references exist in the dataset",
+                "Ensure the query doesn't exceed Power BI limitations",
+                "Try a simpler query first to isolate the issue (e.g., EVALUATE TableName)",
+            ]
+        )
 
     return suggestions
+
 
 @mcp.tool
 def execute_dax_query(ctx: Context, workspace_id: str, dataset_id: str, dax_query: str) -> Dict[str, Any]:
@@ -618,9 +638,7 @@ def execute_dax_query(ctx: Context, workspace_id: str, dataset_id: str, dax_quer
         client = PowerBIClient()
         body = {"queries": [{"query": dax_query.strip()}]}
         result = client.request(
-            "POST",
-            f"/groups/{workspace_id.strip()}/datasets/{dataset_id.strip()}/executeQueries",
-            json_body=body
+            "POST", f"/groups/{workspace_id.strip()}/datasets/{dataset_id.strip()}/executeQueries", json_body=body
         )
 
         # Check if the result contains errors (successful HTTP 200 but with query errors)
@@ -689,8 +707,10 @@ def execute_dax_query(ctx: Context, workspace_id: str, dataset_id: str, dax_quer
             f"Suggestions:\n" + "\n".join(f"  - {s}" for s in suggestions)
         )
 
+
 def main():
     mcp.run(transport="stdio")
+
 
 if __name__ == "__main__":
     main()
