@@ -216,7 +216,7 @@ Their approaches to semantic model surfacing and Power BI integration helped sha
 ## Contributors
 
 <a href="https://github.com/Mitsubishi-Fuso/mcp-server-for-powerbi/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Mitsubishi-Fuso/mcp-server-for-powerbi" />
+  <img src="https://stg.contrib.rocks/image?repo=Mitsubishi-Fuso/mcp-server-for-powerbi" />
 </a>
 
 ## License
