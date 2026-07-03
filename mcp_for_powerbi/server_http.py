@@ -44,7 +44,6 @@ OBO_CLIENT_SECRET = os.getenv("OBO_CLIENT_SECRET") or os.getenv("CLIENT_SECRET")
 HAS_OBO_CREDENTIALS = bool(OBO_CLIENT_ID and OBO_CLIENT_SECRET)
 
 POWER_BI_DEFAULT_SCOPE = "https://analysis.windows.net/powerbi/api/.default"
-FABRIC_DEFAULT_SCOPE = "https://api.fabric.microsoft.com/.default"
 
 # Ensure required configuration
 if not TENANT_ID or not AUDIENCE:
@@ -62,7 +61,7 @@ if LOG_LEVEL == "debug":
 
 # ── Client Factory ─────────────────────────────────────────────────────────
 def create_powerbi_client(request: Request) -> PowerBIClient:
-    """Create PowerBI client from request context with per-resource OBO tokens."""
+    """Create PowerBI client from request context with an OBO-exchanged Power BI token."""
     user_token = get_bearer_token(request)
     if not user_token:
         raise ToolError("Missing user authentication token")
@@ -71,24 +70,15 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
     if not tenant_id:
         raise ToolError("TENANT_ID is not configured")
 
-    def token_provider(service: str) -> str:
-        service_name = service.strip().lower()
-        if service_name == "powerbi":
-            requested_scopes = [POWER_BI_DEFAULT_SCOPE]
-        elif service_name == "fabric":
-            requested_scopes = [FABRIC_DEFAULT_SCOPE]
-        else:
-            raise ToolError(f"Unsupported downstream service for token acquisition: {service}")
+    def token_provider() -> str:
+        requested_scopes = [POWER_BI_DEFAULT_SCOPE]
 
         # Backward-compatible fallback: if OBO credentials aren't configured,
         # pass through the caller token as-is.
         client_id = OBO_CLIENT_ID
         client_secret = OBO_CLIENT_SECRET
         if not client_id or not client_secret:
-            logger.debug(
-                "OBO credentials unavailable; reusing incoming token for service '%s'.",
-                service_name,
-            )
+            logger.debug("OBO credentials unavailable; reusing incoming token for Power BI.")
             return user_token
 
         try:
@@ -103,7 +93,7 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
             raise
         except Exception as exc:
             raise ToolError(
-                f"Failed to acquire {service_name} token via OBO. "
+                f"Failed to acquire Power BI token via OBO. "
                 f"Requested scope: {requested_scopes[0]}. Details: {str(exc)}"
             )
 
@@ -430,11 +420,11 @@ def main():
     logger.info(f"Required Scopes: {REQUIRED_SCOPES}")
     logger.info(f"Required Roles: {REQUIRED_ROLES}")
     if HAS_OBO_CREDENTIALS:
-        logger.info("OBO credentials configured for downstream Power BI/Fabric token exchange.")
+        logger.info("OBO credentials configured for downstream Power BI token exchange.")
     else:
         logger.warning(
             "OBO credentials are not configured. Incoming bearer token will be reused for "
-            "both Power BI and Fabric APIs; this can fail when token audience does not match."
+            "the Power BI API; this can fail when the token audience does not match."
         )
     logger.info(f"Listening on http://0.0.0.0:{PORT}")
     
