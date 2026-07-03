@@ -213,6 +213,12 @@ This project is built on [FastMCP v2](https://gofastmcp.com/getting-started/quic
 
 Their approaches to semantic model surfacing and Power BI integration helped shape the tool design here.
 
+## Contributors
+
+<a href="https://github.com/Mitsubishi-Fuso/mcp-server-for-powerbi/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Mitsubishi-Fuso/mcp-server-for-powerbi" />
+</a>
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
