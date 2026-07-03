@@ -26,6 +26,7 @@ from .server import (
 from .auth_middleware import EntraIDAuthMiddleware, get_authenticated_user, get_bearer_token
 from .obo_flow import ClaimsChallengeError, get_obo_token_cached
 from fastmcp.exceptions import ToolError
+from fastmcp.tools import FunctionTool
 
 # Configure logging
 logging.basicConfig(
@@ -232,13 +233,13 @@ async def mcp_handler(request: Request):
                 ctx = Context(fastmcp=mcp)
                 
                 # tool_info.fn is the actual function
-                if hasattr(tool_info, 'fn') and callable(tool_info.fn):
+                if isinstance(tool_info, FunctionTool):
                     # Check if it's async or sync
                     import inspect
                     if inspect.iscoroutinefunction(tool_info.fn):
-                        result = await tool_info.fn(ctx, **tool_args)  # type: ignore[misc]
+                        result = await tool_info.fn(ctx, **tool_args)
                     else:
-                        result = tool_info.fn(ctx, **tool_args)  # type: ignore[misc]
+                        result = tool_info.fn(ctx, **tool_args)
                 else:
                     raise ToolError(f"Tool {tool_name} is not callable")
                 
