@@ -262,8 +262,27 @@ async def mcp_handler(request: Request):
                     }
                 )
 
+            except ToolError as tool_error:
+                # Expected, caller-correctable failure: bad DAX, unknown dataset,
+                # insufficient permissions. Report it as a tool result with
+                # isError set, so the calling model sees the message and can fix
+                # its query, rather than as a server fault the client can only
+                # treat as a transport failure.
+                logger.info("Tool %s returned an error: %s", tool_name, tool_error)
+                return JSONResponse(
+                    content={
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [{"type": "text", "text": str(tool_error)}],
+                            "isError": True,
+                        },
+                        "id": request_id,
+                    }
+                )
+
             except Exception as tool_error:
-                logger.error(f"Tool execution error: {tool_error}", exc_info=True)
+                # Genuinely unexpected - keep the traceback and the 500.
+                logger.exception("Unexpected error executing tool %s", tool_name)
                 return JSONResponse(
                     status_code=500,
                     content={
