@@ -99,6 +99,11 @@ class PowerBIAPIError(ToolError):
         return clone
 
 
+# Written by _build_error_message and split on by callers that have something
+# better to say than the generic suggestions, so the two must agree.
+_SUGGESTIONS_HEADING = "\nSuggestions:"
+
+
 # Parse and binding failures carry a source position, e.g.
 # "Query (1, 15) The table 'Sales' cannot be found". Execution failures do not.
 _DAX_SOURCE_POSITION = re.compile(r"Query \(\d+,\s*\d+\)")
@@ -300,7 +305,7 @@ class PowerBIClient:
                 error_parts.append(f"{code}: {value}")
 
         if suggestions:
-            error_parts.append("\nSuggestions:")
+            error_parts.append(_SUGGESTIONS_HEADING)
             for suggestion in suggestions:
                 error_parts.append(f"  - {suggestion}")
 
@@ -358,6 +363,118 @@ class PowerBIClient:
             raise ToolError(
                 "Invalid response: The Power BI API returned a non-JSON response. This might indicate a service issue."
             )
+
+
+# The cheapest possible query: it touches no table, so it proves the model is
+# loaded and the caller may query it without going anywhere near a data source.
+_MODEL_REACHABILITY_PROBE = 'EVALUATE ROW("__mcp_probe", 1)'
+
+
+def _describe_datasource(entry: Dict[str, Any]) -> str:
+    """One line naming a data source: its kind and the host it points at."""
+    details = entry.get("connectionDetails")
+    details = details if isinstance(details, dict) else {}
+
+    # datasourceType is Power BI's own label ("Extension" for anything using a
+    # connector), so connectionDetails.kind is the more informative of the two.
+    kind = details.get("kind") or entry.get("datasourceType") or "unknown"
+
+    host = details.get("server") or details.get("url")
+    if not host:
+        # Extension data sources hide the real target in a JSON-encoded string.
+        path = details.get("path")
+        if isinstance(path, str):
+            try:
+                parsed = json.loads(path)
+            except ValueError:
+                host = path
+            else:
+                host = parsed.get("host") if isinstance(parsed, dict) else path
+
+    description = f"{kind} ({host})" if host else str(kind)
+    gateway_id = entry.get("gatewayId")
+    if gateway_id:
+        description += f", reached through gateway {gateway_id}"
+    return description
+
+
+def _diagnose_query_execution_failure(client: PowerBIClient, workspace_id: str, dataset_id: str) -> list[str]:
+    """Find out whether a failed query was the model's fault or the source's.
+
+    Power BI reports every execution failure as the same opaque
+    AnalysisServicesErrorCode, whether the underlying source was stopped, the
+    gateway credentials had expired, or the query timed out. It will not say
+    which. Rather than guess at a cause, this establishes the facts that are
+    actually observable, by re-running the discriminating test by hand:
+
+        trivial query succeeds, table query failed
+            -> the model is loaded and queryable; the failure is entirely in
+               fetching data from the source
+        trivial query fails too
+            -> the model itself is unavailable, so no per-table conclusion holds
+
+    Every call here is best effort and additive. A diagnosis that cannot be
+    completed simply contributes fewer lines; it never replaces or masks the
+    error Power BI actually returned.
+    """
+    findings: list[str] = []
+
+    try:
+        probe = client.request(
+            "POST",
+            f"/groups/{workspace_id}/datasets/{dataset_id}/executeQueries",
+            json_body={"queries": [{"query": _MODEL_REACHABILITY_PROBE}]},
+        )
+    except ToolError:
+        return [
+            "A query touching no table failed as well, so the semantic model itself is not "
+            "answering: check that it is not still loading, and that its capacity is not paused"
+        ]
+
+    # A 200 can still carry an error at any of three nesting levels.
+    if not isinstance(probe, dict) or probe.get("error") or not probe.get("results"):
+        return []
+
+    findings.append(
+        f"The model answered {_MODEL_REACHABILITY_PROBE}, so it is loaded and you are allowed to "
+        "query it: the failure is in retrieving the data, not in your query or your Power BI permissions"
+    )
+
+    # Naming the source turns generic advice into something the reader can act
+    # on. It needs dataset-owner or workspace-admin rights, so it often fails.
+    try:
+        datasources = client.request("GET", f"/groups/{workspace_id}/datasets/{dataset_id}/datasources")
+    except ToolError:
+        datasources = None
+
+    described = [
+        _describe_datasource(entry) for entry in (datasources or {}).get("value", []) if isinstance(entry, dict)
+    ]
+    if described:
+        findings.append("This dataset reads from: " + "; ".join(described))
+
+    findings.append(
+        "Power BI does not report why the source failed. The usual causes are the source being "
+        "stopped or paused (Databricks clusters and SQL warehouses self-terminate when idle), "
+        "expired or revoked gateway credentials, a query timeout, or the gateway's identity "
+        "losing rights on the table"
+    )
+
+    # Naming the person to ask is the difference between an actionable error and
+    # a dead end, since the caller usually cannot inspect the gateway themselves.
+    owner = None
+    try:
+        metadata = client.request("GET", f"/groups/{workspace_id}/datasets/{dataset_id}")
+        owner = metadata.get("configuredBy") if isinstance(metadata, dict) else None
+    except ToolError:
+        pass
+
+    who = f"{owner}, who configured this dataset," if owner else "a workspace admin"
+    findings.append(
+        f"Checking this needs gateway rights the caller usually does not have: ask {who} "
+        "to check the gateway data source status and that the source is running"
+    )
+    return findings
 
 
 # DAX INFO.VIEW.* introspection queries. These run through the Power BI Execute
@@ -931,9 +1048,29 @@ def execute_dax_query(ctx: Context, workspace_id: str, dataset_id: str, dax_quer
     try:
         client = PowerBIClient()
         body = {"queries": [{"query": dax_query.strip()}]}
-        result = client.request(
-            "POST", f"/groups/{workspace_id.strip()}/datasets/{dataset_id.strip()}/executeQueries", json_body=body
-        )
+        try:
+            result = client.request(
+                "POST", f"/groups/{workspace_id.strip()}/datasets/{dataset_id.strip()}/executeQueries", json_body=body
+            )
+        except PowerBIAPIError as exc:
+            # The model ran the query and it failed, with no line/column
+            # reference to blame the DAX. That leaves the data source, and
+            # Power BI will not say more, so go and establish what we can.
+            if exc.error_code == "DatasetExecuteQueriesError" and not _looks_like_dax_binding_error(
+                exc.details.get("DetailsMessage", "")
+            ):
+                findings = _diagnose_query_execution_failure(client, workspace_id.strip(), dataset_id.strip())
+                if findings:
+                    # The suggestions in the raised message are hypotheses the
+                    # diagnosis has now settled, so replace rather than append -
+                    # printing a guess next to the measurement helps nobody.
+                    # _SUGGESTIONS_HEADING is emitted by _build_error_message
+                    # alone, so splitting on it cannot cut into Power BI's text.
+                    stated, _, _ = str(exc).partition(_SUGGESTIONS_HEADING)
+                    raise exc.with_message(
+                        stated.rstrip() + "\n\nDiagnosis:\n" + "\n".join(f"  - {f}" for f in findings)
+                    ) from exc
+            raise
 
         # Check if the result contains errors (successful HTTP 200 but with query errors)
         if isinstance(result, dict):
