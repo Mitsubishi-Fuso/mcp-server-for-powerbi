@@ -12,6 +12,24 @@ from fastmcp.server.dependencies import get_http_headers
 BASE_URL = "https://api.powerbi.com/v1.0/myorg"
 TIMEOUT = 30
 
+# A DAX result larger than this is withheld from the caller. The limit exists
+# because the caller is usually a language model: a result that does not fit
+# its context window is not merely slow to read, it displaces the conversation
+# that gave the query its purpose.
+#
+# This does not protect the server. By the time the size is known the whole
+# response has been fetched and parsed, so the cost of the query has already
+# been paid - what is saved is spending the caller's context on it.
+#
+# Written as 50 * 1024 so that it reports itself as "50.0 KB" rather than
+# contradicting its own name.
+MAX_RESULT_BYTES = 50 * 1024
+
+# Power BI refuses to return more than this from one query, so a result of
+# exactly this many rows has almost certainly been truncated and the caller
+# cannot tell how much was cut.
+_POWERBI_MAX_ROWS = 100_000
+
 mcp = FastMCP("MCP Server for Power BI")
 logger = logging.getLogger(__name__)
 _request_scoped_client_factory: ContextVar[Callable[[], "PowerBIClient"] | None] = ContextVar(
@@ -484,6 +502,85 @@ def get_dataset_details(ctx: Context, workspace_id: str, dataset_id: str) -> Dic
     return data
 
 
+def _format_bytes(count: int) -> str:
+    if count >= 1_048_576:
+        return f"{count / 1_048_576:.1f} MB"
+    if count >= 1024:
+        return f"{count / 1024:.1f} KB"
+    return f"{count} bytes"
+
+
+def _count_result_rows(result: Any) -> int:
+    """Total rows across every table in a query result."""
+    if not isinstance(result, dict):
+        return 0
+
+    rows = 0
+    for query_result in result.get("results", []):
+        if not isinstance(query_result, dict):
+            continue
+        for table in query_result.get("tables", []):
+            if not isinstance(table, dict):
+                continue
+            table_rows = table.get("rows")
+            if isinstance(table_rows, list):
+                rows += len(table_rows)
+    return rows
+
+
+def _check_result_size(result: Any, dax_query: str) -> None:
+    """Withhold a result too large for the caller to do anything useful with.
+
+    Returning it is worse than failing: a model that receives 600 KB of rows
+    has spent its context on data it did not ask for in that quantity, and the
+    request that prompted the query may no longer fit alongside the answer.
+
+    Refusing outright, rather than truncating, is deliberate. Silently handing
+    back the first N rows of an un-aggregated query invites the caller to sum
+    them and report a total that is wrong - a failure that looks like an
+    answer. An error the caller must act on cannot be mistaken for one.
+    """
+    # json.dumps, not len(rows): the caller's cost is the serialised payload,
+    # and a few wide rows can outweigh many narrow ones.
+    size = len(json.dumps(result, default=str).encode("utf-8"))
+    if size <= MAX_RESULT_BYTES:
+        return
+
+    # Deliberately no column list. The caller has usually already read the
+    # schema via get_dataset_details, and can go back for it if not - repeating
+    # it here spends the context this error exists to protect.
+    rows = _count_result_rows(result)
+
+    parts = [
+        "DAX Query Result Too Large",
+        "",
+        f"The query succeeded but returned {rows:,} rows ({_format_bytes(size)}), over the "
+        f"{_format_bytes(MAX_RESULT_BYTES)} limit for a single result. It has been withheld "
+        f"rather than returned, because a result this size would crowd out the context it was "
+        f"meant to inform.",
+    ]
+
+    if rows >= _POWERBI_MAX_ROWS:
+        parts.append(
+            f"\nPower BI caps a single query at {_POWERBI_MAX_ROWS:,} rows, so this result was "
+            f"already truncated - the real total is higher, and unknown."
+        )
+
+    parts.extend(
+        [
+            f"\nQuery:\n{dax_query}",
+            "\nSuggestions:",
+            "  - If you want a total or a breakdown, aggregate in DAX rather than summing rows "
+            "yourself: EVALUATE SUMMARIZECOLUMNS('Table'[Category], \"Total\", SUM('Table'[Amount]))",
+            "  - If you only need to see what the data looks like, sample it: EVALUATE TOPN(50, 'Table')",
+            "  - If you need many rows but few fields, narrow the columns with SELECTCOLUMNS",
+            "  - If you need a subset, filter it: EVALUATE CALCULATETABLE('Table', 'Table'[Year] = 2026)",
+            "  - To find out how big something is before fetching it: EVALUATE ROW(\"n\", COUNTROWS('Table'))",
+        ]
+    )
+    raise ToolError("\n".join(parts))
+
+
 def _analyze_dax_error(error_msg: str, dax_query: str) -> list[str]:
     """Analyze DAX error and provide helpful suggestions.
 
@@ -613,9 +710,15 @@ def execute_dax_query(ctx: Context, workspace_id: str, dataset_id: str, dax_quer
     Returns:
         Query results with tables and rows, or error information if the query fails.
 
+    Prefer aggregating or sampling over listing every row. A result over 50 KB
+    is rejected rather than returned, so an un-aggregated EVALUATE against a
+    large table will fail - use SUMMARIZECOLUMNS to aggregate, TOPN to sample,
+    or COUNTROWS first if you do not know how big the table is.
+
     Common errors:
     - 400 Bad Request: DAX syntax errors, invalid table/column references
     - 403 Forbidden: Missing permissions or tenant setting not enabled
+    - Result too large: the query succeeded but returned more than 50 KB
     - Limitations: Max 100,000 rows or 1,000,000 values per query
 
     Example DAX query:
@@ -693,6 +796,9 @@ def execute_dax_query(ctx: Context, workspace_id: str, dataset_id: str, dax_quer
                                     f"Try using TOPN() to limit results or add filters to reduce data volume."
                                 )
 
+        # Last, so that a genuine query error is reported as itself rather than
+        # as a size problem.
+        _check_result_size(result, dax_query)
         return result
 
     except ToolError:
