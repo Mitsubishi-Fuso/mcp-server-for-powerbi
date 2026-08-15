@@ -56,12 +56,67 @@ class PowerBIAPIError(ToolError):
     """A ToolError that also carries the HTTP status of the failed Power BI call.
 
     Callers that need to react to *how* a call failed (rather than just report
-    it) can read status_code instead of pattern-matching the message text.
+    it) can read status_code, error_code and details instead of
+    pattern-matching the message text.
     """
 
-    def __init__(self, message: str, status_code: int):
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        error_code: str = "Unknown",
+        details: Dict[str, str] | None = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
+        self.error_code = error_code
+        # The code/value pairs from the "pbi.error" block, so callers can
+        # branch on what failed without pattern-matching the rendered message
+        # (which by then also contains our own suggestion text).
+        self.details = details or {}
+
+    def with_message(self, message: str) -> "PowerBIAPIError":
+        """This error with different text, and everything else intact.
+
+        Callers that add context to a failure used to rebuild the error by
+        hand, listing the fields to carry across. Every field added since was
+        one more thing to remember at each call site, and the ones that were
+        forgotten failed silently - the error still looked right, it had just
+        quietly lost what the layer above needed to act on it.
+
+        Copying makes that structural rather than per-call-site: a field added
+        to __init__ is carried by every caller without any of them changing.
+
+        Builds the clone through __new__ and copies __dict__, rather than
+        calling __init__ or copy.copy - both of those go back through the
+        signature, which is the thing being routed around.
+        """
+        clone = self.__class__.__new__(self.__class__)
+        clone.__dict__.update(self.__dict__)
+        # args is a BaseException slot, not an entry in __dict__, and it is
+        # what str() reads.
+        clone.args = (message,)
+        return clone
+
+
+# Parse and binding failures carry a source position, e.g.
+# "Query (1, 15) The table 'Sales' cannot be found". Execution failures do not.
+_DAX_SOURCE_POSITION = re.compile(r"Query \(\d+,\s*\d+\)")
+
+
+def _looks_like_dax_binding_error(details_message: str) -> bool:
+    """True when Power BI's detail text points at the query text itself.
+
+    Distinguishes "your DAX is wrong" from "your DAX was fine and the engine
+    fell over", which need entirely different advice but share the
+    DatasetExecuteQueriesError code.
+    """
+    if not details_message:
+        return False
+    if _DAX_SOURCE_POSITION.search(details_message):
+        return True
+    lowered = details_message.lower()
+    return "syntax" in lowered or "cannot be found" in lowered or "couldn't be found" in lowered
 
 
 class PowerBIClient:
@@ -120,16 +175,55 @@ class PowerBIClient:
             return {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
         return self.headers
 
+    @staticmethod
+    def _extract_error_code(error_data: Any) -> str:
+        """Pull Power BI's own error code out of a response body."""
+        if isinstance(error_data, dict):
+            return error_data.get("error", {}).get("code", "Unknown")
+        return "Unknown"
+
+    @staticmethod
+    def _extract_error_details(error_data: Any) -> Dict[str, str]:
+        """Pull the code/value pairs out of a Power BI "pbi.error" details block.
+
+        Power BI leaves error.message unset for several error classes - notably
+        DatasetExecuteQueriesError - and puts the only useful text under
+        error["pbi.error"]["details"], as a list of {code, detail: {value}}
+        pairs. Without reading those, the caller gets a dump of the whole
+        response body and no indication of what actually failed.
+        """
+        if not isinstance(error_data, dict):
+            return {}
+        pbi_error = error_data.get("error", {}).get("pbi.error")
+        if not isinstance(pbi_error, dict):
+            return {}
+
+        details: Dict[str, str] = {}
+        for entry in pbi_error.get("details", []):
+            if not isinstance(entry, dict):
+                continue
+            code = entry.get("code")
+            detail = entry.get("detail")
+            # Older responses inline the string; current ones wrap it in {type, value}.
+            value = detail.get("value") if isinstance(detail, dict) else detail
+            if code and value is not None:
+                details[str(code)] = str(value)
+        return details
+
     def _build_error_message(self, status_code: int, error_data: Any, path: str) -> str:
         """Build a detailed error message with helpful suggestions."""
         suggestions = []
 
         # Extract error details
+        error_code = self._extract_error_code(error_data)
+        details = self._extract_error_details(error_data)
         if isinstance(error_data, dict):
-            error_code = error_data.get("error", {}).get("code", "Unknown")
-            error_message = error_data.get("error", {}).get("message", str(error_data))
+            # json.dumps, not str(): the latter emits a Python repr with single
+            # quotes, which is neither valid JSON nor pleasant to read.
+            error_message = (
+                error_data.get("error", {}).get("message") or details.get("DetailsMessage") or json.dumps(error_data)
+            )
         else:
-            error_code = "Unknown"
             error_message = str(error_data)
 
         # Build context-aware suggestions based on status code and path
@@ -161,13 +255,34 @@ class PowerBIClient:
             else:
                 suggestions.append("The requested resource was not found")
         elif status_code == 400:
-            suggestions.extend(
-                [
-                    "Check if all required parameters are provided",
-                    "Verify parameter formats (IDs should be valid UUIDs)",
-                    "For DAX queries, check syntax and table/column references",
-                ]
-            )
+            if error_code == "DatasetExecuteQueriesError" and not _looks_like_dax_binding_error(
+                details.get("DetailsMessage", "")
+            ):
+                # No line/column reference means the model parsed and bound the
+                # query, then failed running it. Pointing at DAX syntax here
+                # sends the caller looking in the wrong place.
+                suggestions.extend(
+                    [
+                        "The model accepted the query and failed while executing it - this is not a syntax error",
+                        "If the tables are DirectQuery, the failure is in the pushdown to the underlying source: "
+                        "check that the gateway is online and the source (e.g. the Databricks cluster) is running",
+                        "Check authorization at the source, not just in Power BI: where credentials are passed "
+                        "through per-user, a caller who lacks rights on the underlying table gets this same "
+                        "generic error rather than a permission message",
+                        "Compare against another table in the same model - if some tables succeed, the model and "
+                        "gateway are healthy and the problem is specific to this table",
+                        "Confirm the semantic model has completed a successful refresh (import models only)",
+                        "For import models with row-level security, note the query runs as the calling user",
+                    ]
+                )
+            else:
+                suggestions.extend(
+                    [
+                        "Check if all required parameters are provided",
+                        "Verify parameter formats (IDs should be valid UUIDs)",
+                        "For DAX queries, check syntax and table/column references",
+                    ]
+                )
         elif status_code == 429:
             suggestions.append("Rate limit exceeded - please wait before retrying (limit: 120 requests per minute)")
 
@@ -176,6 +291,13 @@ class PowerBIClient:
         if error_code != "Unknown":
             error_parts.append(f"Code: {error_code}")
         error_parts.append(f"Message: {error_message}")
+
+        # Everything else Power BI told us. AnalysisServicesErrorCode in
+        # particular is the only value that distinguishes one execution
+        # failure from another, so it must survive into the message.
+        for code, value in details.items():
+            if code != "DetailsMessage":
+                error_parts.append(f"{code}: {value}")
 
         if suggestions:
             error_parts.append("\nSuggestions:")
@@ -220,7 +342,12 @@ class PowerBIClient:
                 error_data = r.text
 
             error_message = self._build_error_message(r.status_code, error_data, path)
-            raise PowerBIAPIError(error_message, r.status_code)
+            raise PowerBIAPIError(
+                error_message,
+                r.status_code,
+                self._extract_error_code(error_data),
+                self._extract_error_details(error_data),
+            )
 
         # Parse successful response; some endpoints return 202/204 with no body
         if r.status_code == 204 or not r.content:
@@ -420,18 +547,19 @@ def powerbi_list_workspaces(ctx: Context) -> Dict[str, Any]:
     try:
         client = PowerBIClient()
         return client.request("GET", "/groups")
-    except ToolError as e:
-        # Re-raise with additional context for workspace listing
-        error_msg = str(e)
-        if "401" in error_msg or "Unauthorized" in error_msg:
-            raise ToolError(
-                f"{error_msg}\n\n"
-                f"Additional context for listing workspaces:\n"
-                f"  - This operation requires a valid Power BI access token\n"
-                f"  - The token must have 'Workspace.Read.All' or 'Workspace.ReadWrite.All' scope\n"
-                f"  - Ensure the Authorization header contains a valid OAuth token"
-            )
-        raise
+    except PowerBIAPIError as e:
+        # Add context for workspace listing, but keep the error itself. This
+        # used to search the message text for "401" and rewrap the result in a
+        # plain ToolError, which threw away the status the layer above needs.
+        if e.status_code != 401:
+            raise
+        raise e.with_message(
+            f"{e}\n\n"
+            f"Additional context for listing workspaces:\n"
+            f"  - This operation requires a valid Power BI access token\n"
+            f"  - The token must have 'Workspace.Read.All' or 'Workspace.ReadWrite.All' scope\n"
+            f"  - Ensure the Authorization header contains a valid OAuth token"
+        )
 
 
 @mcp.tool
