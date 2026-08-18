@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from contextvars import ContextVar, Token
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, NamedTuple, Tuple
 from fastmcp import FastMCP, Context
 from fastmcp.exceptions import ToolError
 from .obo_flow import ClaimsChallengeError
@@ -32,6 +32,18 @@ def reset_request_scoped_powerbi_client_factory(
 ) -> None:
     """Reset request-scoped PowerBIClient factory to previous state."""
     _request_scoped_client_factory.reset(token)
+
+
+class PowerBIAPIError(ToolError):
+    """A ToolError that also carries the HTTP status of the failed Power BI call.
+
+    Callers that need to react to *how* a call failed (rather than just report
+    it) can read status_code instead of pattern-matching the message text.
+    """
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class PowerBIClient:
@@ -190,7 +202,7 @@ class PowerBIClient:
                 error_data = r.text
 
             error_message = self._build_error_message(r.status_code, error_data, path)
-            raise ToolError(error_message)
+            raise PowerBIAPIError(error_message, r.status_code)
 
         # Parse successful response; some endpoints return 202/204 with no body
         if r.status_code == 204 or not r.content:
@@ -225,9 +237,25 @@ def _normalize_info_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return {_normalize_info_key(k): v for k, v in row.items()}
 
 
-def _classify_dax_error(message: str) -> str:
+class IntrospectionError(NamedTuple):
+    """Why an INFO.VIEW introspection query failed, and what Power BI said."""
+
+    reason: str
+    message: str
+
+
+def _classify_dax_error(message: str, status_code: int | None = None) -> str:
+    """Classify a failed introspection query into a coarse reason code.
+
+    When the HTTP status is known it is authoritative. Matching the response
+    body alone misfires: Analysis Services error codes are long digit strings
+    that can contain "403" by coincidence.
+    """
+    if status_code in (401, 403):
+        return "tenant_setting_or_permission"
+
     lowered = message.lower()
-    if "403" in message or "tenant" in lowered or "permission" in lowered or "denied" in lowered:
+    if "tenant" in lowered or "permission" in lowered or "denied" in lowered:
         return "tenant_setting_or_permission"
     if "info" in lowered and ("not supported" in lowered or "unknown" in lowered or "cannot find" in lowered):
         return "info_functions_unsupported"
@@ -236,10 +264,12 @@ def _classify_dax_error(message: str) -> str:
 
 def _run_info_query(
     client: PowerBIClient, workspace_id: str, dataset_id: str, dax: str
-) -> Tuple[list[Dict[str, Any]] | None, str]:
-    """Run a single INFO.VIEW DAX query. Returns (rows, error_reason).
+) -> Tuple[list[Dict[str, Any]] | None, IntrospectionError | None]:
+    """Run a single INFO.VIEW DAX query. Returns (rows, error).
 
-    rows is None on failure (error_reason set), or a (possibly empty) list on success.
+    rows is None on failure (error set), or a (possibly empty) list on success.
+    The error carries Power BI's own message, not just a classification, so the
+    caller can relay something actionable to the user.
     """
     body = {"queries": [{"query": dax}], "serializerSettings": {"includeNulls": True}}
     try:
@@ -249,39 +279,46 @@ def _run_info_query(
             json_body=body,
         )
     except ToolError as exc:
-        reason = _classify_dax_error(str(exc))
-        logger.error("DAX introspection query FAILED (%s): %s", reason, dax)
-        return None, reason
+        message = str(exc)
+        status_code = getattr(exc, "status_code", None)
+        reason = _classify_dax_error(message, status_code)
+        return None, IntrospectionError(reason, message)
 
     if not isinstance(result, dict):
-        return None, "invalid_response"
+        return None, IntrospectionError("invalid_response", "The Power BI API returned an unexpected response shape.")
+
+    # An executeQueries call can report failure at three nesting levels, all
+    # inside an HTTP 200.
     if result.get("error"):
-        return None, _classify_dax_error(json.dumps(result["error"], default=str))
+        message = json.dumps(result["error"], default=str)
+        return None, IntrospectionError(_classify_dax_error(message), message)
 
     results = result.get("results", [])
     if not results:
-        return [], ""
+        return [], None
     first = results[0]
     if first.get("error"):
-        return None, _classify_dax_error(json.dumps(first["error"], default=str))
+        message = json.dumps(first["error"], default=str)
+        return None, IntrospectionError(_classify_dax_error(message), message)
 
     tables = first.get("tables", [])
     if not tables:
-        return [], ""
+        return [], None
     table0 = tables[0]
     if table0.get("error"):
-        return None, _classify_dax_error(json.dumps(table0["error"], default=str))
+        message = json.dumps(table0["error"], default=str)
+        return None, IntrospectionError(_classify_dax_error(message), message)
 
     rows = [_normalize_info_row(r) for r in table0.get("rows", [])]
-    return rows, ""
+    return rows, None
 
 
 def _get_semantic_model_via_dax_introspection(
     client: PowerBIClient, workspace_id: str, dataset_id: str
-) -> Tuple[Dict[str, Any], str]:
+) -> Tuple[Dict[str, Any], IntrospectionError | None]:
     """Reconstruct semantic model structure via DAX INFO.VIEW.* queries.
 
-    Returns (model_dict, error_reason).  Empty error_reason means success.
+    Returns (model_dict, error).  A None error means success.
 
     Uses only the Power BI Execute Queries API and returns model *structure* —
     tables, columns, measures (with their DAX expressions), and relationships.
@@ -290,22 +327,27 @@ def _get_semantic_model_via_dax_introspection(
     """
     tables_rows, err = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["tables"])
     if tables_rows is None:
+        err = err or IntrospectionError("api_error", "The tables introspection query failed without a message.")
         logger.warning(
-            "DAX introspection failed on tables query for dataset %s in workspace %s: %s",
+            "DAX introspection failed on tables query for dataset %s in workspace %s (%s): %s",
             dataset_id,
             workspace_id,
-            err,
+            err.reason,
+            err.message,
         )
         return {}, err
 
     # Columns/measures/relationships are best-effort; an empty measures result is
-    # legitimate (model may have none). A hard failure here is logged but not fatal.
+    # legitimate (model may have none). A hard failure here is not fatal, but it
+    # is recorded so the caller does not present a partial model as a complete one.
     columns_rows, cerr = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["columns"])
     measures_rows, merr = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["measures"])
     rel_rows, rerr = _run_info_query(client, workspace_id, dataset_id, _INFO_INTROSPECTION_QUERIES["relationships"])
+    incomplete: Dict[str, Any] = {}
     for label, sub_err in (("columns", cerr), ("measures", merr), ("relationships", rerr)):
         if sub_err:
-            logger.warning("DAX introspection %s query returned error: %s", label, sub_err)
+            logger.warning("DAX introspection %s query returned error (%s): %s", label, sub_err.reason, sub_err.message)
+            incomplete[label] = {"reason": sub_err.reason, "message": sub_err.message}
 
     # Assemble tables keyed by name, attaching their columns and measures.
     tables_by_name: Dict[str, Dict[str, Any]] = {}
@@ -340,8 +382,10 @@ def _get_semantic_model_via_dax_introspection(
         "tables": [tables_by_name[n] for n in order],
         "relationships": rel_rows or [],
     }
+    if incomplete:
+        model["incomplete"] = incomplete
 
-    return model, ""
+    return model, None
 
 
 @mcp.tool
@@ -451,6 +495,22 @@ def get_dataset_details(ctx: Context, workspace_id: str, dataset_id: str) -> Dic
         workspace_id: The unique identifier of the Power BI workspace (UUID format).
         dataset_id: The unique identifier of the dataset (UUID format).
 
+    Returns:
+        Dataset metadata, plus:
+        - semanticModel: tables, columns, measures and relationships, or {} if
+          the structure could not be read.
+        - semanticModelSource: how the structure was obtained.
+        - semanticModelError: present only on failure, with a 'reason' and the
+          message Power BI returned. When this is present the model structure is
+          unavailable, NOT empty - do not tell the user the dataset has no
+          tables. Relay the message instead. A reason of
+          'tenant_setting_or_permission' usually means either the caller lacks
+          Build permission on the dataset, or a Power BI admin has not enabled
+          the 'Dataset Execute Queries REST API' tenant setting.
+        - semanticModel.incomplete: present when the tables were read but some
+          of the columns/measures/relationships queries failed, so those parts
+          of the returned structure are missing rather than genuinely absent.
+
     Raises:
         ToolError: If workspace_id or dataset_id is missing or invalid format
     """
@@ -471,15 +531,18 @@ def get_dataset_details(ctx: Context, workspace_id: str, dataset_id: str) -> Dic
             data["semanticModel"] = semantic_model
             data["semanticModelSource"] = "dax_info_introspection"
         elif err:
-            data["semanticModelSource"] = f"dax_error:{err}"
+            data["semanticModelSource"] = f"dax_error:{err.reason}"
+            data["semanticModelError"] = {"reason": err.reason, "message": err.message}
     except ToolError as exc:
         logger.warning("Failed to retrieve semantic model via DAX introspection: %s", exc)
         logger.debug("Semantic model retrieval ToolError details", exc_info=True)
         data["semanticModelSource"] = "dax_error:tool_error"
+        data["semanticModelError"] = {"reason": "tool_error", "message": str(exc)}
     except Exception as exc:
         logger.warning("Unexpected error retrieving semantic model via DAX introspection: %s", exc)
         logger.debug("Unexpected semantic model retrieval error details", exc_info=True)
         data["semanticModelSource"] = "dax_error:unexpected"
+        data["semanticModelError"] = {"reason": "unexpected", "message": str(exc)}
 
     return data
 

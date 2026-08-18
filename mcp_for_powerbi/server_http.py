@@ -97,6 +97,21 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
     return PowerBIClient(token=user_token, token_provider=token_provider)
 
 
+def _log_tool_error(tool_name: str, tool_error: Exception) -> None:
+    """Log a caller-correctable tool failure: one line at INFO, the rest at DEBUG.
+
+    These messages are written for a model that has to act on them, so they
+    carry suggestions and context and can run to dozens of lines. That is the
+    right size for a tool result and the wrong size for a log at INFO, where it
+    buries the surrounding request in a wall of advice aimed at someone else.
+    """
+    message = str(tool_error)
+    summary, separator, _ = message.partition("\n")
+    logger.info("Tool %s returned an error: %s", tool_name, summary)
+    if separator:
+        logger.debug("Tool %s error detail:\n%s", tool_name, message)
+
+
 # ── Routes ──────────────────────────────────────────────────────────────────
 async def health_check(request: Request):
     """Health check endpoint"""
@@ -262,8 +277,27 @@ async def mcp_handler(request: Request):
                     }
                 )
 
+            except ToolError as tool_error:
+                # Expected, caller-correctable failure: bad DAX, unknown dataset,
+                # insufficient permissions. Report it as a tool result with
+                # isError set, so the calling model sees the message and can fix
+                # its query, rather than as a server fault the client can only
+                # treat as a transport failure.
+                _log_tool_error(tool_name, tool_error)
+                return JSONResponse(
+                    content={
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [{"type": "text", "text": str(tool_error)}],
+                            "isError": True,
+                        },
+                        "id": request_id,
+                    }
+                )
+
             except Exception as tool_error:
-                logger.error(f"Tool execution error: {tool_error}", exc_info=True)
+                # Genuinely unexpected - keep the traceback and the 500.
+                logger.exception("Unexpected error executing tool %s", tool_name)
                 return JSONResponse(
                     status_code=500,
                     content={
