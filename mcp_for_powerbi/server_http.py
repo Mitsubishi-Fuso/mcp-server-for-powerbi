@@ -26,6 +26,7 @@ from .server import (
 # Import authentication
 from .auth_middleware import EntraIDAuthMiddleware, get_authenticated_user, get_bearer_token
 from .obo_flow import ClaimsChallengeError, get_obo_token_cached
+from .auth_mode import PASSTHROUGH, PASSTHROUGH_WARNING, AuthModeError, resolve_auth_mode
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import FunctionTool
 
@@ -37,15 +38,35 @@ logger = logging.getLogger(__name__)
 PORT = int(os.getenv("PORT", "3001"))
 TENANT_ID = os.getenv("TENANT_ID")
 AUDIENCE = os.getenv("AUDIENCE")
-OBO_CLIENT_ID = os.getenv("OBO_CLIENT_ID") or os.getenv("CLIENT_ID")
-OBO_CLIENT_SECRET = os.getenv("OBO_CLIENT_SECRET") or os.getenv("CLIENT_SECRET")
-HAS_OBO_CREDENTIALS = bool(OBO_CLIENT_ID and OBO_CLIENT_SECRET)
+
+
+def _first_env(*names: str) -> str | None:
+    """Read the first of several environment variables that is set."""
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
+
+
+# OBO_* and the bare CLIENT_* forms are the historical names, still honoured.
+ENTRA_CLIENT_ID = _first_env("ENTRA_CLIENT_ID", "OBO_CLIENT_ID", "CLIENT_ID")
+ENTRA_CLIENT_SECRET = _first_env("ENTRA_CLIENT_SECRET", "OBO_CLIENT_SECRET", "CLIENT_SECRET")
 
 POWER_BI_DEFAULT_SCOPE = "https://analysis.windows.net/powerbi/api/.default"
 
 # Ensure required configuration
 if not TENANT_ID or not AUDIENCE:
     logger.error("TENANT_ID and AUDIENCE are required in environment")
+    sys.exit(1)
+
+try:
+    AUTH_MODE = resolve_auth_mode(
+        os.getenv("AUTH_MODE"),
+        has_credentials=bool(ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET),
+    )
+except AuthModeError as exc:
+    logger.error("%s", exc)
     sys.exit(1)
 
 # Optional role/scope requirements
@@ -59,39 +80,40 @@ if LOG_LEVEL == "debug":
 
 # ── Client Factory ─────────────────────────────────────────────────────────
 def create_powerbi_client(request: Request) -> PowerBIClient:
-    """Create PowerBI client from request context with an OBO-exchanged Power BI token."""
+    """Build a Power BI client for this request, per the configured auth mode."""
     user_token = get_bearer_token(request)
     if not user_token:
         raise ToolError("Missing user authentication token")
+
+    if AUTH_MODE == PASSTHROUGH:
+        # The caller's token is already addressed to Power BI, and is sent on
+        # unchanged. Deprecated: see auth_mode.PASSTHROUGH_WARNING.
+        return PowerBIClient(token=user_token)
 
     tenant_id = TENANT_ID
     if not tenant_id:
         raise ToolError("TENANT_ID is not configured")
 
+    client_id, client_secret = ENTRA_CLIENT_ID, ENTRA_CLIENT_SECRET
+    if not client_id or not client_secret:
+        raise ToolError("Entra client credentials are not configured")
+
     def token_provider() -> str:
-        requested_scopes = [POWER_BI_DEFAULT_SCOPE]
-
-        # Backward-compatible fallback: if OBO credentials aren't configured,
-        # pass through the caller token as-is.
-        client_id = OBO_CLIENT_ID
-        client_secret = OBO_CLIENT_SECRET
-        if not client_id or not client_secret:
-            logger.debug("OBO credentials unavailable; reusing incoming token for Power BI.")
-            return user_token
-
         try:
             return get_obo_token_cached(
                 tenant_id=tenant_id,
                 client_id=client_id,
                 client_secret=client_secret,
                 assertion=user_token,
-                scopes=requested_scopes,
+                scopes=[POWER_BI_DEFAULT_SCOPE],
             )
         except ClaimsChallengeError:
+            # Carries a conditional access challenge the client must satisfy
+            # interactively; it has to reach the transport intact.
             raise
         except Exception as exc:
             raise ToolError(
-                f"Failed to acquire Power BI token via OBO. Requested scope: {requested_scopes[0]}. Details: {str(exc)}"
+                f"Failed to acquire Power BI token via OBO. Requested scope: {POWER_BI_DEFAULT_SCOPE}. Details: {exc}"
             )
 
     return PowerBIClient(token=user_token, token_provider=token_provider)
@@ -375,6 +397,10 @@ async def mcp_handler(request: Request):
 def create_app() -> Starlette:
     """Create Starlette application with authentication"""
 
+    logger.info("Authentication mode: %s", AUTH_MODE)
+    if AUTH_MODE == PASSTHROUGH:
+        logger.warning("%s", PASSTHROUGH_WARNING)
+
     # Keep explicit runtime checks so failures remain actionable in logs/responses.
     if not TENANT_ID:
         raise ToolError("TENANT_ID is not configured")
@@ -437,13 +463,6 @@ def main():
     logger.info(f"Audience: {AUDIENCE}")
     logger.info(f"Required Scopes: {REQUIRED_SCOPES}")
     logger.info(f"Required Roles: {REQUIRED_ROLES}")
-    if HAS_OBO_CREDENTIALS:
-        logger.info("OBO credentials configured for downstream Power BI token exchange.")
-    else:
-        logger.warning(
-            "OBO credentials are not configured. Incoming bearer token will be reused for "
-            "the Power BI API; this can fail when the token audience does not match."
-        )
     logger.info(f"Listening on http://0.0.0.0:{PORT}")
 
     app = create_app()
