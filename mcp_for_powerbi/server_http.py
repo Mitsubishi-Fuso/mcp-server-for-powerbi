@@ -27,9 +27,18 @@ from .server import (
 )
 
 # Import authentication
-from .auth_middleware import EntraIDAuthMiddleware, get_authenticated_user, get_bearer_token
+from .auth_middleware import EntraIDAuthMiddleware, EntraIDPayload, get_authenticated_user, get_bearer_token
 from .obo_flow import ClaimsChallengeError, get_obo_token_cached, invalidate_obo_token
-from .auth_mode import PASSTHROUGH, PASSTHROUGH_WARNING, AuthModeError, resolve_auth_mode
+from .auth_mode import (
+    CUSTODY,
+    PASSTHROUGH,
+    PASSTHROUGH_WARNING,
+    AuthModeError,
+    ReauthenticationRequired,
+    resolve_auth_mode,
+)
+from .custody_flow import CustodyError, CustodyFlow
+from .token_store import TokenStoreError, create_token_store
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import FunctionTool
 
@@ -58,6 +67,17 @@ ENTRA_CLIENT_SECRET = _first_env("ENTRA_CLIENT_SECRET", "OBO_CLIENT_SECRET", "CL
 
 POWER_BI_DEFAULT_SCOPE = "https://analysis.windows.net/powerbi/api/.default"
 
+# The address browsers and MCP clients reach this server on. Custody mode needs
+# it because Entra redirects back to a URL that must be known before any request
+# arrives; other modes fall back to the request's own origin.
+PUBLIC_URL = (os.getenv("PUBLIC_URL") or "").rstrip("/")
+
+# Exact redirect URIs of the MCP clients allowed to sign in, and optionally the
+# client_ids they present.
+CUSTODY_REDIRECT_URIS = tuple(u.strip() for u in os.getenv("CUSTODY_REDIRECT_URIS", "").split(",") if u.strip())
+CUSTODY_CLIENT_IDS = tuple(c.strip() for c in os.getenv("CUSTODY_CLIENT_IDS", "").split(",") if c.strip())
+SESSION_ENCRYPTION_KEY = os.getenv("SESSION_ENCRYPTION_KEY")
+
 # Ensure required configuration
 if not TENANT_ID or not AUDIENCE:
     logger.error("TENANT_ID and AUDIENCE are required in environment")
@@ -71,6 +91,22 @@ try:
 except AuthModeError as exc:
     logger.error("%s", exc)
     sys.exit(1)
+
+CUSTODY_FLOW: CustodyFlow | None = None
+if AUTH_MODE == CUSTODY:
+    try:
+        CUSTODY_FLOW = CustodyFlow(
+            tenant_id=TENANT_ID,
+            client_id=ENTRA_CLIENT_ID or "",
+            client_secret=ENTRA_CLIENT_SECRET or "",
+            public_url=PUBLIC_URL,
+            redirect_uris=CUSTODY_REDIRECT_URIS,
+            client_ids=CUSTODY_CLIENT_IDS,
+            store=create_token_store(SESSION_ENCRYPTION_KEY),
+        )
+    except (CustodyError, TokenStoreError) as exc:
+        logger.error("%s", exc)
+        sys.exit(1)
 
 # Optional role/scope requirements
 REQUIRED_ROLES = [s.strip() for s in os.getenv("REQUIRED_ROLES", "").split(",") if s.strip()]
@@ -87,6 +123,9 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
     user_token = get_bearer_token(request)
     if not user_token:
         raise ToolError("Missing user authentication token")
+
+    if AUTH_MODE == CUSTODY:
+        return _custody_powerbi_client(request)
 
     if AUTH_MODE == PASSTHROUGH:
         # The caller's token is already addressed to Power BI, and is sent on
@@ -126,6 +165,26 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
     )
 
     return PowerBIClient(token=user_token, token_provider=token_provider)
+
+
+def _custody_powerbi_client(request: Request) -> PowerBIClient:
+    """A client whose Power BI token comes from this server's own session store."""
+    session_key = getattr(request.state, "custody_session_key", None)
+    session = getattr(request.state, "custody_session", None)
+    flow = CUSTODY_FLOW
+    if not session_key or session is None or flow is None:
+        raise ToolError("No custody session for this request")
+
+    def token_provider() -> str:
+        return flow.power_bi_token(session_key, session)
+
+    # A rejected token is refreshed by expiring what we cached; the session
+    # itself is only dropped if Entra refuses to renew it.
+    def invalidate() -> None:
+        session.access_token_expires_at = 0.0
+
+    request.state.invalidate_downstream_token = invalidate
+    return PowerBIClient(token="pending", token_provider=token_provider)
 
 
 def _drop_cached_downstream_token(request: Request) -> bool:
@@ -186,7 +245,28 @@ def _tool_error_response(request_id: Any, message: str) -> JSONResponse:
     )
 
 
-def _unauthenticated_response(request_id: Any, exc: PowerBIAPIError) -> JSONResponse:
+def _base_url(request: Request) -> str:
+    """This server's public address.
+
+    Behind an ingress the request's own origin is the internal one, so
+    PUBLIC_URL wins wherever it is set.
+    """
+    return PUBLIC_URL or str(request.base_url).rstrip("/")
+
+
+def _resource_metadata_url(request: Request) -> str:
+    return f"{_base_url(request)}/.well-known/oauth-protected-resource"
+
+
+def _challenge(request: Request, error: str, description: str) -> str:
+    """A WWW-Authenticate that points at the metadata describing how to fix it."""
+    return (
+        f'Bearer error="{error}", error_description="{_header_safe(description)}", '
+        f'resource_metadata="{_resource_metadata_url(request)}"'
+    )
+
+
+def _unauthenticated_response(request_id: Any, exc: PowerBIAPIError, request: Request) -> JSONResponse:
     """Report that Power BI rejected the token, so the client re-authenticates.
 
     Reached only once re-minting the token has already been tried and failed,
@@ -195,10 +275,13 @@ def _unauthenticated_response(request_id: Any, exc: PowerBIAPIError) -> JSONResp
     the model apologising for a failure it cannot act on, while the client sat
     on a session it did not know was dead.
     """
-    description = _header_safe(f"Power BI rejected the access token ({exc.error_code}).")
     return JSONResponse(
         status_code=401,
-        headers={"WWW-Authenticate": f'Bearer error="invalid_token", error_description="{description}"'},
+        headers={
+            "WWW-Authenticate": _challenge(
+                request, "invalid_token", f"Power BI rejected the access token ({exc.error_code})."
+            )
+        },
         content={
             "jsonrpc": "2.0",
             "error": {
@@ -221,10 +304,62 @@ async def health_check(request: Request):
     return PlainTextResponse("MCP mcp-server-for-powerbi is running")
 
 
+async def protected_resource_metadata(request: Request):
+    """RFC 9728: what this resource is, and who issues tokens for it.
+
+    Served in every mode, so a client can discover where to authenticate
+    instead of being configured with it by hand. The answer differs by mode:
+    under custody this server issues the tokens, and otherwise Entra does.
+    """
+    base = _base_url(request)
+    if AUTH_MODE == CUSTODY:
+        authorization_servers = [base]
+        scopes = ["powerbi.read"]
+    else:
+        authorization_servers = [f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"]
+        scopes = [POWER_BI_DEFAULT_SCOPE]
+
+    return JSONResponse(
+        content={
+            "resource": f"{base}/mcp",
+            "authorization_servers": authorization_servers,
+            "scopes_supported": scopes,
+            "bearer_methods_supported": ["header"],
+            "resource_documentation": base,
+        }
+    )
+
+
+async def authorization_server_metadata(request: Request):
+    """RFC 8414, custody mode only, where this server is the issuer."""
+    base = _base_url(request)
+    return JSONResponse(
+        content={
+            "issuer": base,
+            "authorization_endpoint": f"{base}/authorize",
+            "token_endpoint": f"{base}/token",
+            "revocation_endpoint": f"{base}/revoke",
+            "response_types_supported": ["code"],
+            "response_modes_supported": ["query"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "token_endpoint_auth_methods_supported": ["none"],
+            "code_challenge_methods_supported": ["S256"],
+            "scopes_supported": ["powerbi.read"],
+        }
+    )
+
+
 async def revoke_handler(request: Request):
-    """Token revocation endpoint for LibreChat compatibility"""
-    # LibreChat calls this when disconnecting, just return success
-    logger.info("Token revocation requested (no-op)")
+    """RFC 7009 revocation.
+
+    Under custody this ends the session and discards the refresh token held for
+    it. In other modes the server holds nothing to revoke, so it only
+    acknowledges, which is what clients calling this on disconnect expect.
+    """
+    if AUTH_MODE == CUSTODY and CUSTODY_FLOW is not None:
+        return await CUSTODY_FLOW.revoke(request)
+
+    logger.info("Token revocation requested; nothing is held in %s mode", AUTH_MODE)
     return JSONResponse(status_code=200, content={"success": True, "message": "Token revocation acknowledged"})
 
 
@@ -386,6 +521,29 @@ async def mcp_handler(request: Request):
                     }
                 )
 
+            except ReauthenticationRequired as needs_signin:
+                # A conditional access challenge under OBO, or a refused
+                # refresh token under custody. Either way nothing here can
+                # rescue it and the model cannot act on it, so the client is
+                # told to sign in again. ClaimsChallengeError is handled
+                # further out, where its challenge header is reproduced intact.
+                if isinstance(needs_signin, ClaimsChallengeError):
+                    raise
+                logger.info("Tool %s needs the caller to sign in again: %s", tool_name, needs_signin)
+                return JSONResponse(
+                    status_code=401,
+                    headers={"WWW-Authenticate": _challenge(request, "invalid_token", str(needs_signin))},
+                    content={
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32001,
+                            "message": "unauthenticated: the session has ended and the user must sign in again.",
+                            "data": {"detail": str(needs_signin)},
+                        },
+                        "id": request_id,
+                    },
+                )
+
             except PowerBIAPIError as tool_error:
                 # A rejection that survived the retry above is not something the
                 # model can act on, so make the client re-authenticate. Anything
@@ -397,7 +555,7 @@ async def mcp_handler(request: Request):
                         tool_error.status_code,
                         tool_error.error_code,
                     )
-                    return _unauthenticated_response(request_id, tool_error)
+                    return _unauthenticated_response(request_id, tool_error, request)
 
                 _log_tool_error(tool_name, tool_error)
                 return _tool_error_response(request_id, str(tool_error))
@@ -487,6 +645,45 @@ async def mcp_handler(request: Request):
         reset_request_scoped_powerbi_client_factory(context_token)
 
 
+def _unauthorized(request: Request, error: str, description: str) -> JSONResponse:
+    """A 401 that tells the client where to go and authenticate."""
+    return JSONResponse(
+        status_code=401,
+        headers={"WWW-Authenticate": _challenge(request, error, description)},
+        content={"error": error, "error_description": description},
+    )
+
+
+async def custody_authenticated_mcp_handler(request: Request):
+    """Authenticate the caller against a session this server issued.
+
+    The bearer token here is one of ours, not Entra's, so there is no signature
+    to verify and no audience to check: the token either names a live session or
+    it does not.
+    """
+    if CUSTODY_FLOW is None:
+        return JSONResponse(status_code=500, content={"error": "server_error"})
+
+    header = request.headers.get("authorization", "")
+    token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    if not token:
+        return _unauthorized(request, "invalid_request", "an access token is required")
+
+    resolved = CUSTODY_FLOW.resolve_access_token(token)
+    if resolved is None:
+        return _unauthorized(request, "invalid_token", "the session has ended or the token is not recognised")
+
+    session_key, session = resolved
+    request.state.custody_session_key = session_key
+    request.state.custody_session = session
+    request.state.bearer_token = token
+    # The shape the rest of the handler already expects.
+    request.state.authenticated = EntraIDPayload(
+        {"oid": session.user_oid, "tid": session.user_tid, "preferred_username": session.username}
+    )
+    return await mcp_handler(request)
+
+
 # ── Application Setup ───────────────────────────────────────────────────────
 def create_app() -> Starlette:
     """Create Starlette application with authentication"""
@@ -494,6 +691,9 @@ def create_app() -> Starlette:
     logger.info("Authentication mode: %s", AUTH_MODE)
     if AUTH_MODE == PASSTHROUGH:
         logger.warning("%s", PASSTHROUGH_WARNING)
+    if AUTH_MODE == CUSTODY:
+        logger.info("Custody sign-in at %s/authorize, redirecting back to %s/callback", PUBLIC_URL, PUBLIC_URL)
+        logger.info("Registered client redirect URIs: %s", ", ".join(CUSTODY_REDIRECT_URIS))
 
     # Keep explicit runtime checks so failures remain actionable in logs/responses.
     if not TENANT_ID:
@@ -534,16 +734,28 @@ def create_app() -> Starlette:
         )
     ]
 
-    # Create app with routes
-    app = Starlette(
-        debug=(LOG_LEVEL == "debug"),
-        routes=[
-            Route("/", health_check, methods=["GET"]),
-            Route("/mcp", authenticated_mcp_handler, methods=["POST", "GET", "DELETE"]),
-            Route("/revoke", revoke_handler, methods=["POST"]),
-        ],
-        middleware=middleware,
-    )
+    routes = [
+        Route("/", health_check, methods=["GET"]),
+        Route("/revoke", revoke_handler, methods=["POST"]),
+        # RFC 9728. Served in every mode, so a client can find out where to
+        # authenticate rather than being told by hand.
+        Route("/.well-known/oauth-protected-resource", protected_resource_metadata, methods=["GET"]),
+        Route("/.well-known/oauth-protected-resource/{path:path}", protected_resource_metadata, methods=["GET"]),
+    ]
+
+    if AUTH_MODE == CUSTODY and CUSTODY_FLOW is not None:
+        routes += [
+            Route("/mcp", custody_authenticated_mcp_handler, methods=["POST", "GET", "DELETE"]),
+            Route("/authorize", CUSTODY_FLOW.authorize, methods=["GET"]),
+            Route("/callback", CUSTODY_FLOW.callback, methods=["GET"]),
+            Route("/token", CUSTODY_FLOW.token, methods=["POST"]),
+            # RFC 8414, only meaningful where this server issues the tokens.
+            Route("/.well-known/oauth-authorization-server", authorization_server_metadata, methods=["GET"]),
+        ]
+    else:
+        routes.append(Route("/mcp", authenticated_mcp_handler, methods=["POST", "GET", "DELETE"]))
+
+    app = Starlette(debug=(LOG_LEVEL == "debug"), routes=routes, middleware=middleware)
 
     return app
 

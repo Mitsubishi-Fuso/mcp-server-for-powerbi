@@ -36,6 +36,7 @@ class StubRequest:
         self.state.authenticated = EntraIDPayload({"oid": "user-1", "preferred_username": "tester@example.com"})
         self.state.bearer_token = "caller-token"
         self.headers = {"authorization": "Bearer caller-token"}
+        self.base_url = "https://powerbi-mcp.example.com/"
 
     async def json(self):
         return self._body

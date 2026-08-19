@@ -10,6 +10,8 @@ from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass
 import requests
 
+from .auth_mode import ReauthenticationRequired
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ class ClaimsChallengeInfo:
     error_codes: Optional[List[int]] = None
 
 
-class ClaimsChallengeError(Exception):
+class ClaimsChallengeError(ReauthenticationRequired):
     """Exception raised when a claims challenge is encountered"""
 
     def __init__(self, message: str, info: ClaimsChallengeInfo):

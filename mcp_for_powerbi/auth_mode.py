@@ -13,9 +13,10 @@ something else.
 """
 
 OBO = "obo"
+CUSTODY = "custody"
 PASSTHROUGH = "passthrough"
 
-SUPPORTED_MODES = (OBO, PASSTHROUGH)
+SUPPORTED_MODES = (OBO, CUSTODY, PASSTHROUGH)
 
 PASSTHROUGH_WARNING = (
     "AUTH_MODE=passthrough sends the caller's own access token on to Power BI. The MCP "
@@ -26,6 +27,16 @@ PASSTHROUGH_WARNING = (
 
 class AuthModeError(RuntimeError):
     """The requested authentication mode cannot be honoured."""
+
+
+class ReauthenticationRequired(Exception):
+    """Only a fresh interactive sign-in can fix this.
+
+    Each mode has its own version - a conditional access claims challenge under
+    OBO, a refused refresh token under custody - but they need the same
+    handling, and the tools must not see either as an ordinary failure they
+    could report and move on from.
+    """
 
 
 def resolve_auth_mode(configured: str | None, *, has_credentials: bool) -> str:
@@ -48,9 +59,9 @@ def resolve_auth_mode(configured: str | None, *, has_credentials: bool) -> str:
             f"AUTH_MODE={requested!r} is not a supported mode. Choose one of: {', '.join(SUPPORTED_MODES)}."
         )
 
-    if requested == OBO and not has_credentials:
+    if requested in (OBO, CUSTODY) and not has_credentials:
         raise AuthModeError(
-            "AUTH_MODE=obo requires ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET "
+            f"AUTH_MODE={requested} requires ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET "
             "(or the deprecated OBO_CLIENT_ID / OBO_CLIENT_SECRET)."
         )
 

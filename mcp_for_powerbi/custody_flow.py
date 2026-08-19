@@ -40,6 +40,7 @@ import requests
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
+from .auth_mode import ReauthenticationRequired
 from .token_store import (
     AuthorizationCode,
     PendingAuthorization,
@@ -67,7 +68,7 @@ class CustodyError(RuntimeError):
     """Something went wrong that the operator, not the user, has to fix."""
 
 
-class SessionExpired(RuntimeError):
+class SessionExpired(ReauthenticationRequired):
     """The stored credentials no longer work; the client must sign in again."""
 
 

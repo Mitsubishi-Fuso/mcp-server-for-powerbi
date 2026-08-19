@@ -2,7 +2,7 @@
 
 import pytest
 
-from mcp_for_powerbi.auth_mode import OBO, PASSTHROUGH, SUPPORTED_MODES, AuthModeError, resolve_auth_mode
+from mcp_for_powerbi.auth_mode import CUSTODY, OBO, PASSTHROUGH, SUPPORTED_MODES, AuthModeError, resolve_auth_mode
 
 
 @pytest.mark.parametrize(
@@ -12,6 +12,7 @@ from mcp_for_powerbi.auth_mode import OBO, PASSTHROUGH, SUPPORTED_MODES, AuthMod
         ("", True, OBO),
         ("obo", True, OBO),
         ("  OBO  ", True, OBO),
+        ("custody", True, CUSTODY),
         ("passthrough", False, PASSTHROUGH),
         ("passthrough", True, PASSTHROUGH),
         ("PassThrough", False, PASSTHROUGH),
@@ -30,13 +31,14 @@ def test_unset_without_credentials_is_refused():
         assert mode in str(exc.value)
 
 
-def test_obo_without_credentials_is_refused():
+@pytest.mark.parametrize("mode", [OBO, CUSTODY])
+def test_a_mode_needing_credentials_is_refused_without_them(mode):
     with pytest.raises(AuthModeError) as exc:
-        resolve_auth_mode("obo", has_credentials=False)
+        resolve_auth_mode(mode, has_credentials=False)
     assert "ENTRA_CLIENT_ID" in str(exc.value)
 
 
-@pytest.mark.parametrize("configured", ["custody", "bogus", "on-behalf-of", "none"])
+@pytest.mark.parametrize("configured", ["bogus", "on-behalf-of", "none", "proxy"])
 def test_unknown_mode_is_refused(configured):
     with pytest.raises(AuthModeError) as exc:
         resolve_auth_mode(configured, has_credentials=True)
