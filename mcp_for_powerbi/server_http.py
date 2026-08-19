@@ -5,7 +5,9 @@ Uses modern streamable-http transport with Entra ID authentication for Azure/Lib
 
 import os
 import sys
+import inspect
 import logging
+from typing import Any
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -18,6 +20,7 @@ import json
 # Import all tools and configurations from the main server
 from .server import (
     mcp,
+    PowerBIAPIError,
     PowerBIClient,
     set_request_scoped_powerbi_client_factory,
     reset_request_scoped_powerbi_client_factory,
@@ -25,7 +28,7 @@ from .server import (
 
 # Import authentication
 from .auth_middleware import EntraIDAuthMiddleware, get_authenticated_user, get_bearer_token
-from .obo_flow import ClaimsChallengeError, get_obo_token_cached
+from .obo_flow import ClaimsChallengeError, get_obo_token_cached, invalidate_obo_token
 from .auth_mode import PASSTHROUGH, PASSTHROUGH_WARNING, AuthModeError, resolve_auth_mode
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import FunctionTool
@@ -116,7 +119,26 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
                 f"Failed to acquire Power BI token via OBO. Requested scope: {POWER_BI_DEFAULT_SCOPE}. Details: {exc}"
             )
 
+    # Lets the tool-call handler discard this token if Power BI rejects it, so
+    # a stale cache entry costs one retry rather than a re-authentication.
+    request.state.invalidate_downstream_token = lambda: invalidate_obo_token(
+        tenant_id, client_id, user_token, [POWER_BI_DEFAULT_SCOPE]
+    )
+
     return PowerBIClient(token=user_token, token_provider=token_provider)
+
+
+def _drop_cached_downstream_token(request: Request) -> bool:
+    """Discard the Power BI token this server minted, so the next call re-mints it.
+
+    Returns False when there is nothing to discard: under passthrough the token
+    is the caller's own, and only the client can replace it.
+    """
+    invalidate = getattr(request.state, "invalidate_downstream_token", None)
+    if invalidate is None:
+        return False
+    invalidate()
+    return True
 
 
 def _log_tool_error(tool_name: str, tool_error: Exception) -> None:
@@ -132,6 +154,65 @@ def _log_tool_error(tool_name: str, tool_error: Exception) -> None:
     logger.info("Tool %s returned an error: %s", tool_name, summary)
     if separator:
         logger.debug("Tool %s error detail:\n%s", tool_name, message)
+
+
+async def _invoke_tool(tool_info: Any, ctx: Any, tool_args: dict, tool_name: str) -> Any:
+    """Call a registered tool, whether its implementation is sync or async."""
+    if not isinstance(tool_info, FunctionTool):
+        raise ToolError(f"Tool {tool_name} is not callable")
+    if inspect.iscoroutinefunction(tool_info.fn):
+        return await tool_info.fn(ctx, **tool_args)
+    return tool_info.fn(ctx, **tool_args)
+
+
+# ── Error responses ────────────────────────────────────────────────────────
+def _header_safe(value: str, limit: int = 200) -> str:
+    """Collapse a message into something that can sit in a quoted header param."""
+    collapsed = " ".join(value.split())
+    collapsed = collapsed.replace("\\", " ").replace('"', "'")
+    if len(collapsed) > limit:
+        collapsed = collapsed[: limit - 1].rstrip() + "\u2026"
+    return collapsed
+
+
+def _tool_error_response(request_id: Any, message: str) -> JSONResponse:
+    """Report a tool failure as an MCP result the calling model can read."""
+    return JSONResponse(
+        content={
+            "jsonrpc": "2.0",
+            "result": {"content": [{"type": "text", "text": message}], "isError": True},
+            "id": request_id,
+        }
+    )
+
+
+def _unauthenticated_response(request_id: Any, exc: PowerBIAPIError) -> JSONResponse:
+    """Report that Power BI rejected the token, so the client re-authenticates.
+
+    Reached only once re-minting the token has already been tried and failed,
+    so whatever is wrong is upstream of this server: the caller's sign-in no
+    longer buys access to Power BI. Returning that as a tool result would leave
+    the model apologising for a failure it cannot act on, while the client sat
+    on a session it did not know was dead.
+    """
+    description = _header_safe(f"Power BI rejected the access token ({exc.error_code}).")
+    return JSONResponse(
+        status_code=401,
+        headers={"WWW-Authenticate": f'Bearer error="invalid_token", error_description="{description}"'},
+        content={
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32001,
+                "message": "unauthenticated: Power BI rejected the access token.",
+                "data": {
+                    "powerBiStatus": exc.status_code,
+                    "powerBiCode": exc.error_code,
+                    "detail": str(exc),
+                },
+            },
+            "id": request_id,
+        },
+    )
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -247,17 +328,23 @@ async def mcp_handler(request: Request):
 
                 ctx = Context(fastmcp=mcp)
 
-                # tool_info.fn is the actual function
-                if isinstance(tool_info, FunctionTool):
-                    # Check if it's async or sync
-                    import inspect
-
-                    if inspect.iscoroutinefunction(tool_info.fn):
-                        result = await tool_info.fn(ctx, **tool_args)
-                    else:
-                        result = tool_info.fn(ctx, **tool_args)
-                else:
-                    raise ToolError(f"Tool {tool_name} is not callable")
+                try:
+                    result = await _invoke_tool(tool_info, ctx, tool_args, tool_name)
+                except PowerBIAPIError as rejected:
+                    # Under OBO the rejected token is one this server minted, and
+                    # a cache entry that outlived the real expiry is the usual
+                    # cause. Drop it and try once more, rather than sending the
+                    # caller off to sign in again for something a fresh exchange
+                    # would have fixed.
+                    if not (rejected.is_token_rejection() and _drop_cached_downstream_token(request)):
+                        raise
+                    logger.info(
+                        "Power BI rejected our token on %s (%s %s); retrying once with a fresh one",
+                        tool_name,
+                        rejected.status_code,
+                        rejected.error_code,
+                    )
+                    result = await _invoke_tool(tool_info, ctx, tool_args, tool_name)
 
                 # Check for claims challenge
                 claims_challenge = getattr(request.state, "claims_challenge_holder", {}).get("challenge")
@@ -299,6 +386,22 @@ async def mcp_handler(request: Request):
                     }
                 )
 
+            except PowerBIAPIError as tool_error:
+                # A rejection that survived the retry above is not something the
+                # model can act on, so make the client re-authenticate. Anything
+                # else Power BI reports is an ordinary tool failure.
+                if tool_error.is_token_rejection():
+                    logger.warning(
+                        "Power BI rejected the token on %s (%s %s)",
+                        tool_name,
+                        tool_error.status_code,
+                        tool_error.error_code,
+                    )
+                    return _unauthenticated_response(request_id, tool_error)
+
+                _log_tool_error(tool_name, tool_error)
+                return _tool_error_response(request_id, str(tool_error))
+
             except ClaimsChallengeError:
                 # Let the outer handler turn this into a 401 + WWW-Authenticate.
                 raise
@@ -310,16 +413,7 @@ async def mcp_handler(request: Request):
                 # its query, rather than as a server fault the client can only
                 # treat as a transport failure.
                 _log_tool_error(tool_name, tool_error)
-                return JSONResponse(
-                    content={
-                        "jsonrpc": "2.0",
-                        "result": {
-                            "content": [{"type": "text", "text": str(tool_error)}],
-                            "isError": True,
-                        },
-                        "id": request_id,
-                    }
-                )
+                return _tool_error_response(request_id, str(tool_error))
 
             except Exception as tool_error:
                 # Genuinely unexpected - keep the traceback and the 500.
