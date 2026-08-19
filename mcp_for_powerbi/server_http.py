@@ -29,14 +29,7 @@ from .server import (
 # Import authentication
 from .auth_middleware import EntraIDAuthMiddleware, EntraIDPayload, get_authenticated_user, get_bearer_token
 from .obo_flow import ClaimsChallengeError, get_obo_token_cached, invalidate_obo_token
-from .auth_mode import (
-    CUSTODY,
-    PASSTHROUGH,
-    PASSTHROUGH_WARNING,
-    AuthModeError,
-    ReauthenticationRequired,
-    resolve_auth_mode,
-)
+from .auth_mode import CUSTODY, AuthModeError, ReauthenticationRequired, resolve_auth_mode
 from .custody_flow import CustodyError, CustodyFlow
 from .token_store import TokenStoreError, create_token_store
 from fastmcp.exceptions import ToolError
@@ -127,11 +120,6 @@ def create_powerbi_client(request: Request) -> PowerBIClient:
     if AUTH_MODE == CUSTODY:
         return _custody_powerbi_client(request)
 
-    if AUTH_MODE == PASSTHROUGH:
-        # The caller's token is already addressed to Power BI, and is sent on
-        # unchanged. Deprecated: see auth_mode.PASSTHROUGH_WARNING.
-        return PowerBIClient(token=user_token)
-
     tenant_id = TENANT_ID
     if not tenant_id:
         raise ToolError("TENANT_ID is not configured")
@@ -190,8 +178,8 @@ def _custody_powerbi_client(request: Request) -> PowerBIClient:
 def _drop_cached_downstream_token(request: Request) -> bool:
     """Discard the Power BI token this server minted, so the next call re-mints it.
 
-    Returns False when there is nothing to discard: under passthrough the token
-    is the caller's own, and only the client can replace it.
+    Returns False when no client was built for this request, and so no token of
+    ours was ever involved.
     """
     invalidate = getattr(request.state, "invalidate_downstream_token", None)
     if invalidate is None:
@@ -689,8 +677,6 @@ def create_app() -> Starlette:
     """Create Starlette application with authentication"""
 
     logger.info("Authentication mode: %s", AUTH_MODE)
-    if AUTH_MODE == PASSTHROUGH:
-        logger.warning("%s", PASSTHROUGH_WARNING)
     if AUTH_MODE == CUSTODY:
         logger.info("Custody sign-in at %s/authorize, redirecting back to %s/callback", PUBLIC_URL, PUBLIC_URL)
         logger.info("Registered client redirect URIs: %s", ", ".join(CUSTODY_REDIRECT_URIS))

@@ -1,8 +1,9 @@
 """What happens when Power BI rejects the token a tool call was made with.
 
-Under OBO the rejected token is one this server minted, so a stale cache entry
-should cost a retry rather than a re-authentication. Under passthrough the token
-belongs to the caller and only the client can replace it.
+In both modes the rejected token is one this server minted, so a stale one
+should cost a retry rather than a re-authentication: OBO drops the cached
+exchange, custody expires the token it is holding. Only a rejection that
+survives the retry means the user has to sign in again.
 """
 
 import asyncio
@@ -11,8 +12,20 @@ import types
 
 import pytest
 
+from cryptography.fernet import Fernet
+
 from mcp_for_powerbi.auth_middleware import EntraIDPayload
 from mcp_for_powerbi.server import PowerBIAPIError, PowerBIClient
+from mcp_for_powerbi.token_store import Session
+
+CUSTODY_ENV = {
+    "AUTH_MODE": "custody",
+    "ENTRA_CLIENT_ID": "server-app",
+    "ENTRA_CLIENT_SECRET": "server-secret",
+    "PUBLIC_URL": "https://powerbi-mcp.example.com",
+    "CUSTODY_REDIRECT_URIS": "https://librechat.example.com/cb",
+    "SESSION_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+}
 
 WORKSPACES = {"value": [{"id": "ws-1", "name": "Sales"}]}
 
@@ -125,22 +138,30 @@ def test_ordinary_failure_is_not_retried_and_stays_a_tool_error(obo_server, scri
     assert "Dataset not found" in payload["result"]["content"][0]["text"]
 
 
-def test_passthrough_does_not_retry_a_token_it_cannot_replace(load_server_http, scripted_request):
-    module = load_server_http(AUTH_MODE="passthrough")
-    calls = scripted_request([rejection()])
+def test_custody_expires_its_cached_token_and_retries(load_server_http, scripted_request, monkeypatch):
+    """Custody holds the token itself, so a rejection means renew, not re-auth."""
+    module = load_server_http(**CUSTODY_ENV)
+    calls = scripted_request([rejection(), WORKSPACES])
 
-    response = handle(module, call_tool())
+    session = Session("oid-1", "tid-1", "user@example.com", "refresh-value", "stale-token", 1e12)
+    request = call_tool()
+    request.state.custody_session_key = "session-key"
+    request.state.custody_session = session
 
-    assert response.status_code == 401
-    assert len(calls) == 1, "there is nothing to refresh, so retrying would only repeat the failure"
+    response = handle(module, request)
+
+    assert response.status_code == 200
+    assert len(calls) == 2
+    assert session.access_token_expires_at == 0.0, "the stale token should have been expired, not kept"
 
 
-def test_401_body_carries_what_power_bi_said(load_server_http, scripted_request):
-    module = load_server_http(AUTH_MODE="passthrough")
-    scripted_request([rejection()])
+def test_401_body_carries_what_power_bi_said(obo_server, scripted_request):
+    module, _ = obo_server
+    scripted_request([rejection(), rejection()])
 
     response = handle(module, call_tool())
     payload = body_of(response)
 
     assert payload["error"]["data"]["powerBiStatus"] == 403
     assert payload["id"] == 7
+    assert "resource_metadata=" in response.headers["www-authenticate"], "the client needs to be told where to go"

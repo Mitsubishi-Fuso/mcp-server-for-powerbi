@@ -18,7 +18,7 @@ LONG = (
 
 @pytest.fixture
 def emit(load_server_http):
-    module = load_server_http(AUTH_MODE="passthrough")
+    module = load_server_http(AUTH_MODE="obo", ENTRA_CLIENT_ID="a", ENTRA_CLIENT_SECRET="b")
 
     class Capture(logging.Handler):
         def __init__(self):
