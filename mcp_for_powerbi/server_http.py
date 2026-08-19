@@ -277,6 +277,10 @@ async def mcp_handler(request: Request):
                     }
                 )
 
+            except ClaimsChallengeError:
+                # Let the outer handler turn this into a 401 + WWW-Authenticate.
+                raise
+
             except ToolError as tool_error:
                 # Expected, caller-correctable failure: bad DAX, unknown dataset,
                 # insufficient permissions. Report it as a tool result with
@@ -319,7 +323,7 @@ async def mcp_handler(request: Request):
             )
 
     except ClaimsChallengeError as e:
-        logger.warning(f"Claims challenge: {e.info.error_description}")
+        logger.warning("Claims challenge (%s/%s): %s", e.info.error, e.info.suberror, e.info.error_description)
         try:
             req_id = body.get("id") if "body" in locals() else None
         except Exception:
@@ -332,11 +336,19 @@ async def mcp_handler(request: Request):
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32001,
-                    "message": "claims_challenge",
+                    "message": (
+                        "claims_challenge: re-authentication is required to satisfy a conditional access "
+                        f"policy on the Power BI API. {e.info.error_description or ''}".strip()
+                    ),
                     "data": {
                         "claims": e.info.claims,
+                        # Raw JSON form: pass this as the `claims` parameter on a
+                        # fresh /authorize request to satisfy the challenge.
+                        "claimsRaw": e.info.claims_raw,
                         "decodedClaims": e.info.decoded_claims,
                         "error": e.info.error,
+                        "suberror": e.info.suberror,
+                        "errorCodes": e.info.error_codes,
                         "errorDescription": e.info.error_description,
                         "traceId": e.info.trace_id,
                         "correlationId": e.info.correlation_id,

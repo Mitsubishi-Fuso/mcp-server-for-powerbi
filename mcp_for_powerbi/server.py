@@ -169,10 +169,10 @@ class PowerBIClient:
                 access_token = self._token_provider()
             except ToolError:
                 raise
-            except ClaimsChallengeError as exc:
-                raise ToolError(
-                    f"Claims challenge required for Power BI token. WWW-Authenticate: {exc.info.www_authenticate}"
-                )
+            except ClaimsChallengeError:
+                # Must reach the transport layer intact so it can be turned into
+                # a 401 + WWW-Authenticate for the client to re-authenticate.
+                raise
             except Exception as exc:
                 raise ToolError(f"Failed to get Power BI access token: {str(exc)}")
             if not access_token:
