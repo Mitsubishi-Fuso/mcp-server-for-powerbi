@@ -19,12 +19,17 @@ class ClaimsChallengeInfo:
 
     status: int
     www_authenticate: str
-    claims: str
+    claims: str  # base64 form, as carried in a WWW-Authenticate header
     decoded_claims: Optional[Any] = None
     error: Optional[str] = None
     error_description: Optional[str] = None
     trace_id: Optional[str] = None
     correlation_id: Optional[str] = None
+    # Raw JSON claims string, as the token endpoint returns it. This is what a
+    # client must send as the `claims` query parameter on /authorize.
+    claims_raw: Optional[str] = None
+    suberror: Optional[str] = None
+    error_codes: Optional[List[int]] = None
 
 
 class ClaimsChallengeError(Exception):
@@ -102,18 +107,115 @@ def _extract_claims_param(www_authenticate: Optional[str]) -> Optional[str]:
 
 
 def _decode_claims_payload(claims: str) -> Any:
-    """Decode base64-encoded claims parameter"""
-    try:
-        import base64
-        import json
+    """Decode a claims parameter, which may be raw JSON or base64-encoded JSON"""
+    import base64
+    import json
 
-        decoded = base64.b64decode(claims).decode("utf-8")
+    stripped = claims.strip()
+    if stripped.startswith("{"):
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return stripped
+
+    try:
+        # Tolerate missing padding and the base64url alphabet.
+        padded = stripped + "=" * (-len(stripped) % 4)
+        decoded = base64.urlsafe_b64decode(padded).decode("utf-8")
         try:
             return json.loads(decoded)
         except json.JSONDecodeError:
             return decoded
     except Exception:
         return None
+
+
+def _encode_claims_for_header(claims: str) -> str:
+    """Return the base64 form of a claims value, for use in WWW-Authenticate"""
+    import base64
+
+    stripped = claims.strip()
+    if not stripped.startswith("{"):
+        # Already base64 (came from a header).
+        return stripped
+    return base64.b64encode(stripped.encode("utf-8")).decode("ascii")
+
+
+# Suberrors that Entra ID returns on the token endpoint when the caller must
+# repeat the request interactively to satisfy a conditional access policy.
+_INTERACTION_SUBERRORS = {
+    "basic_action",
+    "additional_action",
+    "message_only",
+    "consent_required",
+    "user_password_expired",
+    "bad_token",
+}
+
+# Error codes that always mean "the user must sign in again interactively",
+# even when Entra returns no claims blob to replay.
+_INTERACTION_ERROR_CODES = {
+    50076,  # MFA required
+    50079,  # MFA enrolment required
+    50158,  # External security challenge not satisfied
+    53000,  # Device not compliant
+    53001,  # Device not domain joined
+    53003,  # Blocked by conditional access
+    65001,  # Consent required
+}
+
+
+def _build_claims_challenge(
+    response_status: int, www_authenticate: Optional[str], error_data: Dict[str, Any]
+) -> Optional[ClaimsChallengeInfo]:
+    """
+    Detect a conditional-access claims challenge in an Entra ID token error.
+
+    The token endpoint signals these in the JSON body (a `claims` property plus
+    a `suberror`), not in a WWW-Authenticate header, so the header alone is not
+    enough to spot one.
+    """
+    claims_value = _extract_claims_param(www_authenticate) or error_data.get("claims")
+    suberror = error_data.get("suberror")
+    error_codes = error_data.get("error_codes") or []
+
+    needs_interaction = (
+        bool(claims_value)
+        or suberror in _INTERACTION_SUBERRORS
+        or any(code in _INTERACTION_ERROR_CODES for code in error_codes)
+        or error_data.get("error") in ("interaction_required", "consent_required")
+    )
+    if not needs_interaction:
+        return None
+
+    claims_b64 = _encode_claims_for_header(claims_value) if claims_value else ""
+
+    if not www_authenticate:
+        # Synthesise a step-up challenge (RFC 9470) so downstream clients get a
+        # standard signal to re-authenticate.
+        parts = ['Bearer error="insufficient_claims"']
+        if claims_b64:
+            parts.append(f'claims="{claims_b64}"')
+        description = error_data.get("error_description")
+        if description:
+            # Keep it to one line and free of quotes so the header stays valid.
+            flattened = " ".join(description.split()).replace('"', "'")
+            parts.append(f'error_description="{flattened[:400]}"')
+        www_authenticate = ", ".join(parts)
+
+    return ClaimsChallengeInfo(
+        status=response_status,
+        www_authenticate=www_authenticate,
+        claims=claims_b64,
+        decoded_claims=_decode_claims_payload(claims_value) if claims_value else None,
+        error=error_data.get("error"),
+        error_description=error_data.get("error_description"),
+        trace_id=error_data.get("trace_id"),
+        correlation_id=error_data.get("correlation_id"),
+        claims_raw=claims_value or None,
+        suberror=suberror,
+        error_codes=error_codes or None,
+    )
 
 
 def acquire_obo_token(
@@ -176,33 +278,21 @@ def acquire_obo_token(
         www_authenticate = response.headers.get("WWW-Authenticate")
 
         if not response.ok:
-            body_preview = response.text[:600]
+            try:
+                error_data = response.json()
+            except Exception:
+                error_data = {}
+
+            # 2000 chars so a claims blob is never truncated out of the log.
             log(
                 "error",
                 "obo.error",
-                {"status": response.status_code, "body": body_preview, "wwwAuthenticate": www_authenticate},
+                {"status": response.status_code, "body": response.text[:2000], "wwwAuthenticate": www_authenticate},
             )
 
-            # Check for claims challenge
-            claims_param = _extract_claims_param(www_authenticate)
-            if claims_param and www_authenticate:
-                try:
-                    error_data = response.json()
-                except Exception:
-                    error_data = {}
-
-                decoded_claims = _decode_claims_payload(claims_param)
-                info = ClaimsChallengeInfo(
-                    status=response.status_code,
-                    www_authenticate=www_authenticate,
-                    claims=claims_param,
-                    decoded_claims=decoded_claims,
-                    error=error_data.get("error"),
-                    error_description=error_data.get("error_description"),
-                    trace_id=error_data.get("trace_id"),
-                    correlation_id=error_data.get("correlation_id"),
-                )
-
+            # Check for claims challenge, in the body as well as the header.
+            info = _build_claims_challenge(response.status_code, www_authenticate, error_data)
+            if info:
                 log(
                     "warning",
                     "obo.claims_challenge",
@@ -210,6 +300,9 @@ def acquire_obo_token(
                         "status": info.status,
                         "claims": info.claims,
                         "decodedClaims": info.decoded_claims,
+                        "error": info.error,
+                        "suberror": info.suberror,
+                        "errorCodes": info.error_codes,
                         "traceId": info.trace_id,
                         "correlationId": info.correlation_id,
                         "wwwAuthenticate": info.www_authenticate,
@@ -221,7 +314,8 @@ def acquire_obo_token(
 
                 raise ClaimsChallengeError("obo_claims_challenge", info)
 
-            raise Exception(f"obo_failed: status {response.status_code}")
+            detail = error_data.get("error_description") or response.text[:300]
+            raise Exception(f"obo_failed: status {response.status_code}: {detail}")
 
         result = response.json()
         access_token = result.get("access_token")

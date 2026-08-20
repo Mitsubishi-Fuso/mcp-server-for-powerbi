@@ -15,7 +15,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "ty",
-  "ruff"
+  "ruff",
+  "pytest>=8.0"
 ]
 
 [project.scripts]
@@ -33,3 +34,6 @@ exclude = ["helm*", "build*", "scripts*"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

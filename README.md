@@ -78,8 +78,11 @@ uv sync
 PORT=3001
 TENANT_ID=your-tenant-id
 AUDIENCE=your-api-app-id
-OBO_CLIENT_ID=your-obo-client-id
-OBO_CLIENT_SECRET=your-obo-client-secret
+
+# Authentication mode: obo (or the deprecated passthrough)
+AUTH_MODE=obo
+ENTRA_CLIENT_ID=your-client-id
+ENTRA_CLIENT_SECRET=your-client-secret
 
 # Authorization
 REQUIRED_SCOPES=mcp.access
@@ -109,10 +112,29 @@ uv run mcp-for-powerbi
 
 ### OAuth with Entra ID
 
-Both HTTP and STDIO modes now use Entra ID OAuth2 with:
+Both HTTP and STDIO modes use Entra ID OAuth2 with:
 - **JWT Validation**: Verifies token signature, audience, issuer
-- **OBO Flow**: Exchanges user token for downstream Power BI and Fabric tokens (resource-bound)
 - **Authorization**: Validates roles and scopes
+
+### Authentication modes
+
+`AUTH_MODE` selects how the server obtains a token for the Power BI API. The
+server will not choose for you: an unrecognised mode, or one whose credentials
+are missing, stops it at startup.
+
+| Mode | How the Power BI token is obtained |
+|---|---|
+| `obo` | On-Behalf-Of exchange of the caller's token, using `ENTRA_CLIENT_ID` / `ENTRA_CLIENT_SECRET`. Nothing long-lived is stored. |
+| `passthrough` | **Deprecated.** The caller's own token is sent on to Power BI unchanged. |
+
+Leaving `AUTH_MODE` unset selects `obo` when client credentials are present, so
+existing deployments are unaffected.
+
+`passthrough` is deprecated because it is token passthrough: the server accepts
+an access token that Entra issued for the Power BI API rather than for this
+server, which the MCP authorization spec prohibits. It remains available for one
+release so deployments that were getting it implicitly have somewhere to land,
+and it logs a warning at startup.
 
 ## Client Integration Examples
 

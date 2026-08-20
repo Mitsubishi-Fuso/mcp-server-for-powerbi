@@ -5,7 +5,9 @@ Uses modern streamable-http transport with Entra ID authentication for Azure/Lib
 
 import os
 import sys
+import inspect
 import logging
+from typing import Any
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -18,6 +20,7 @@ import json
 # Import all tools and configurations from the main server
 from .server import (
     mcp,
+    PowerBIAPIError,
     PowerBIClient,
     set_request_scoped_powerbi_client_factory,
     reset_request_scoped_powerbi_client_factory,
@@ -25,7 +28,8 @@ from .server import (
 
 # Import authentication
 from .auth_middleware import EntraIDAuthMiddleware, get_authenticated_user, get_bearer_token
-from .obo_flow import ClaimsChallengeError, get_obo_token_cached
+from .obo_flow import ClaimsChallengeError, get_obo_token_cached, invalidate_obo_token
+from .auth_mode import PASSTHROUGH, PASSTHROUGH_WARNING, AuthModeError, resolve_auth_mode
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import FunctionTool
 
@@ -37,15 +41,35 @@ logger = logging.getLogger(__name__)
 PORT = int(os.getenv("PORT", "3001"))
 TENANT_ID = os.getenv("TENANT_ID")
 AUDIENCE = os.getenv("AUDIENCE")
-OBO_CLIENT_ID = os.getenv("OBO_CLIENT_ID") or os.getenv("CLIENT_ID")
-OBO_CLIENT_SECRET = os.getenv("OBO_CLIENT_SECRET") or os.getenv("CLIENT_SECRET")
-HAS_OBO_CREDENTIALS = bool(OBO_CLIENT_ID and OBO_CLIENT_SECRET)
+
+
+def _first_env(*names: str) -> str | None:
+    """Read the first of several environment variables that is set."""
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
+
+
+# OBO_* and the bare CLIENT_* forms are the historical names, still honoured.
+ENTRA_CLIENT_ID = _first_env("ENTRA_CLIENT_ID", "OBO_CLIENT_ID", "CLIENT_ID")
+ENTRA_CLIENT_SECRET = _first_env("ENTRA_CLIENT_SECRET", "OBO_CLIENT_SECRET", "CLIENT_SECRET")
 
 POWER_BI_DEFAULT_SCOPE = "https://analysis.windows.net/powerbi/api/.default"
 
 # Ensure required configuration
 if not TENANT_ID or not AUDIENCE:
     logger.error("TENANT_ID and AUDIENCE are required in environment")
+    sys.exit(1)
+
+try:
+    AUTH_MODE = resolve_auth_mode(
+        os.getenv("AUTH_MODE"),
+        has_credentials=bool(ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET),
+    )
+except AuthModeError as exc:
+    logger.error("%s", exc)
     sys.exit(1)
 
 # Optional role/scope requirements
@@ -59,42 +83,62 @@ if LOG_LEVEL == "debug":
 
 # ── Client Factory ─────────────────────────────────────────────────────────
 def create_powerbi_client(request: Request) -> PowerBIClient:
-    """Create PowerBI client from request context with an OBO-exchanged Power BI token."""
+    """Build a Power BI client for this request, per the configured auth mode."""
     user_token = get_bearer_token(request)
     if not user_token:
         raise ToolError("Missing user authentication token")
+
+    if AUTH_MODE == PASSTHROUGH:
+        # The caller's token is already addressed to Power BI, and is sent on
+        # unchanged. Deprecated: see auth_mode.PASSTHROUGH_WARNING.
+        return PowerBIClient(token=user_token)
 
     tenant_id = TENANT_ID
     if not tenant_id:
         raise ToolError("TENANT_ID is not configured")
 
+    client_id, client_secret = ENTRA_CLIENT_ID, ENTRA_CLIENT_SECRET
+    if not client_id or not client_secret:
+        raise ToolError("Entra client credentials are not configured")
+
     def token_provider() -> str:
-        requested_scopes = [POWER_BI_DEFAULT_SCOPE]
-
-        # Backward-compatible fallback: if OBO credentials aren't configured,
-        # pass through the caller token as-is.
-        client_id = OBO_CLIENT_ID
-        client_secret = OBO_CLIENT_SECRET
-        if not client_id or not client_secret:
-            logger.debug("OBO credentials unavailable; reusing incoming token for Power BI.")
-            return user_token
-
         try:
             return get_obo_token_cached(
                 tenant_id=tenant_id,
                 client_id=client_id,
                 client_secret=client_secret,
                 assertion=user_token,
-                scopes=requested_scopes,
+                scopes=[POWER_BI_DEFAULT_SCOPE],
             )
         except ClaimsChallengeError:
+            # Carries a conditional access challenge the client must satisfy
+            # interactively; it has to reach the transport intact.
             raise
         except Exception as exc:
             raise ToolError(
-                f"Failed to acquire Power BI token via OBO. Requested scope: {requested_scopes[0]}. Details: {str(exc)}"
+                f"Failed to acquire Power BI token via OBO. Requested scope: {POWER_BI_DEFAULT_SCOPE}. Details: {exc}"
             )
 
+    # Lets the tool-call handler discard this token if Power BI rejects it, so
+    # a stale cache entry costs one retry rather than a re-authentication.
+    request.state.invalidate_downstream_token = lambda: invalidate_obo_token(
+        tenant_id, client_id, user_token, [POWER_BI_DEFAULT_SCOPE]
+    )
+
     return PowerBIClient(token=user_token, token_provider=token_provider)
+
+
+def _drop_cached_downstream_token(request: Request) -> bool:
+    """Discard the Power BI token this server minted, so the next call re-mints it.
+
+    Returns False when there is nothing to discard: under passthrough the token
+    is the caller's own, and only the client can replace it.
+    """
+    invalidate = getattr(request.state, "invalidate_downstream_token", None)
+    if invalidate is None:
+        return False
+    invalidate()
+    return True
 
 
 def _log_tool_error(tool_name: str, tool_error: Exception) -> None:
@@ -110,6 +154,65 @@ def _log_tool_error(tool_name: str, tool_error: Exception) -> None:
     logger.info("Tool %s returned an error: %s", tool_name, summary)
     if separator:
         logger.debug("Tool %s error detail:\n%s", tool_name, message)
+
+
+async def _invoke_tool(tool_info: Any, ctx: Any, tool_args: dict, tool_name: str) -> Any:
+    """Call a registered tool, whether its implementation is sync or async."""
+    if not isinstance(tool_info, FunctionTool):
+        raise ToolError(f"Tool {tool_name} is not callable")
+    if inspect.iscoroutinefunction(tool_info.fn):
+        return await tool_info.fn(ctx, **tool_args)
+    return tool_info.fn(ctx, **tool_args)
+
+
+# ── Error responses ────────────────────────────────────────────────────────
+def _header_safe(value: str, limit: int = 200) -> str:
+    """Collapse a message into something that can sit in a quoted header param."""
+    collapsed = " ".join(value.split())
+    collapsed = collapsed.replace("\\", " ").replace('"', "'")
+    if len(collapsed) > limit:
+        collapsed = collapsed[: limit - 1].rstrip() + "\u2026"
+    return collapsed
+
+
+def _tool_error_response(request_id: Any, message: str) -> JSONResponse:
+    """Report a tool failure as an MCP result the calling model can read."""
+    return JSONResponse(
+        content={
+            "jsonrpc": "2.0",
+            "result": {"content": [{"type": "text", "text": message}], "isError": True},
+            "id": request_id,
+        }
+    )
+
+
+def _unauthenticated_response(request_id: Any, exc: PowerBIAPIError) -> JSONResponse:
+    """Report that Power BI rejected the token, so the client re-authenticates.
+
+    Reached only once re-minting the token has already been tried and failed,
+    so whatever is wrong is upstream of this server: the caller's sign-in no
+    longer buys access to Power BI. Returning that as a tool result would leave
+    the model apologising for a failure it cannot act on, while the client sat
+    on a session it did not know was dead.
+    """
+    description = _header_safe(f"Power BI rejected the access token ({exc.error_code}).")
+    return JSONResponse(
+        status_code=401,
+        headers={"WWW-Authenticate": f'Bearer error="invalid_token", error_description="{description}"'},
+        content={
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32001,
+                "message": "unauthenticated: Power BI rejected the access token.",
+                "data": {
+                    "powerBiStatus": exc.status_code,
+                    "powerBiCode": exc.error_code,
+                    "detail": str(exc),
+                },
+            },
+            "id": request_id,
+        },
+    )
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -225,17 +328,23 @@ async def mcp_handler(request: Request):
 
                 ctx = Context(fastmcp=mcp)
 
-                # tool_info.fn is the actual function
-                if isinstance(tool_info, FunctionTool):
-                    # Check if it's async or sync
-                    import inspect
-
-                    if inspect.iscoroutinefunction(tool_info.fn):
-                        result = await tool_info.fn(ctx, **tool_args)
-                    else:
-                        result = tool_info.fn(ctx, **tool_args)
-                else:
-                    raise ToolError(f"Tool {tool_name} is not callable")
+                try:
+                    result = await _invoke_tool(tool_info, ctx, tool_args, tool_name)
+                except PowerBIAPIError as rejected:
+                    # Under OBO the rejected token is one this server minted, and
+                    # a cache entry that outlived the real expiry is the usual
+                    # cause. Drop it and try once more, rather than sending the
+                    # caller off to sign in again for something a fresh exchange
+                    # would have fixed.
+                    if not (rejected.is_token_rejection() and _drop_cached_downstream_token(request)):
+                        raise
+                    logger.info(
+                        "Power BI rejected our token on %s (%s %s); retrying once with a fresh one",
+                        tool_name,
+                        rejected.status_code,
+                        rejected.error_code,
+                    )
+                    result = await _invoke_tool(tool_info, ctx, tool_args, tool_name)
 
                 # Check for claims challenge
                 claims_challenge = getattr(request.state, "claims_challenge_holder", {}).get("challenge")
@@ -277,6 +386,26 @@ async def mcp_handler(request: Request):
                     }
                 )
 
+            except PowerBIAPIError as tool_error:
+                # A rejection that survived the retry above is not something the
+                # model can act on, so make the client re-authenticate. Anything
+                # else Power BI reports is an ordinary tool failure.
+                if tool_error.is_token_rejection():
+                    logger.warning(
+                        "Power BI rejected the token on %s (%s %s)",
+                        tool_name,
+                        tool_error.status_code,
+                        tool_error.error_code,
+                    )
+                    return _unauthenticated_response(request_id, tool_error)
+
+                _log_tool_error(tool_name, tool_error)
+                return _tool_error_response(request_id, str(tool_error))
+
+            except ClaimsChallengeError:
+                # Let the outer handler turn this into a 401 + WWW-Authenticate.
+                raise
+
             except ToolError as tool_error:
                 # Expected, caller-correctable failure: bad DAX, unknown dataset,
                 # insufficient permissions. Report it as a tool result with
@@ -284,16 +413,7 @@ async def mcp_handler(request: Request):
                 # its query, rather than as a server fault the client can only
                 # treat as a transport failure.
                 _log_tool_error(tool_name, tool_error)
-                return JSONResponse(
-                    content={
-                        "jsonrpc": "2.0",
-                        "result": {
-                            "content": [{"type": "text", "text": str(tool_error)}],
-                            "isError": True,
-                        },
-                        "id": request_id,
-                    }
-                )
+                return _tool_error_response(request_id, str(tool_error))
 
             except Exception as tool_error:
                 # Genuinely unexpected - keep the traceback and the 500.
@@ -319,7 +439,7 @@ async def mcp_handler(request: Request):
             )
 
     except ClaimsChallengeError as e:
-        logger.warning(f"Claims challenge: {e.info.error_description}")
+        logger.warning("Claims challenge (%s/%s): %s", e.info.error, e.info.suberror, e.info.error_description)
         try:
             req_id = body.get("id") if "body" in locals() else None
         except Exception:
@@ -332,11 +452,19 @@ async def mcp_handler(request: Request):
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32001,
-                    "message": "claims_challenge",
+                    "message": (
+                        "claims_challenge: re-authentication is required to satisfy a conditional access "
+                        f"policy on the Power BI API. {e.info.error_description or ''}".strip()
+                    ),
                     "data": {
                         "claims": e.info.claims,
+                        # Raw JSON form: pass this as the `claims` parameter on a
+                        # fresh /authorize request to satisfy the challenge.
+                        "claimsRaw": e.info.claims_raw,
                         "decodedClaims": e.info.decoded_claims,
                         "error": e.info.error,
+                        "suberror": e.info.suberror,
+                        "errorCodes": e.info.error_codes,
                         "errorDescription": e.info.error_description,
                         "traceId": e.info.trace_id,
                         "correlationId": e.info.correlation_id,
@@ -362,6 +490,10 @@ async def mcp_handler(request: Request):
 # ── Application Setup ───────────────────────────────────────────────────────
 def create_app() -> Starlette:
     """Create Starlette application with authentication"""
+
+    logger.info("Authentication mode: %s", AUTH_MODE)
+    if AUTH_MODE == PASSTHROUGH:
+        logger.warning("%s", PASSTHROUGH_WARNING)
 
     # Keep explicit runtime checks so failures remain actionable in logs/responses.
     if not TENANT_ID:
@@ -425,13 +557,6 @@ def main():
     logger.info(f"Audience: {AUDIENCE}")
     logger.info(f"Required Scopes: {REQUIRED_SCOPES}")
     logger.info(f"Required Roles: {REQUIRED_ROLES}")
-    if HAS_OBO_CREDENTIALS:
-        logger.info("OBO credentials configured for downstream Power BI token exchange.")
-    else:
-        logger.warning(
-            "OBO credentials are not configured. Incoming bearer token will be reused for "
-            "the Power BI API; this can fail when the token audience does not match."
-        )
     logger.info(f"Listening on http://0.0.0.0:{PORT}")
 
     app = create_app()
