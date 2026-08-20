@@ -47,7 +47,6 @@ env/
 
 # === Package Managers ===
 Pipfile.lock
-uv.lock
 
 # === IDEs & Editors ===
 .vscode/

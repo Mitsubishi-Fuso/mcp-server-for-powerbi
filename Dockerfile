@@ -8,13 +8,13 @@ FROM ghcr.io/astral-sh/uv:python3.12-alpine AS builder
 WORKDIR /app
 
 # Copy dependency files and source code
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 COPY mcp_for_powerbi ./mcp_for_powerbi
 
-# Create virtual environment and install package (production mode, not editable)
-RUN uv venv /opt/venv && \
-    . /opt/venv/bin/activate && \
-    uv pip install --no-cache .
+# Install into a venv the runtime stage can copy wholesale. --no-editable so the
+# package is installed properly rather than linked back to the build context.
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+RUN uv sync --locked --no-dev --no-editable --no-cache
 
 # Stage 2: Runtime stage - minimal Alpine production image
 FROM python:3.12-alpine
@@ -40,9 +40,11 @@ WORKDIR /app
 # Switch to non-root user
 USER mcpuser
 
-# Health check for Azure Container Apps
+# Health check for Azure Container Apps. Addressed by literal IPv4: uvicorn
+# binds 0.0.0.0, while `localhost` resolves to ::1 first inside the image, so
+# the probe was refused and the container never reported healthy.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider "http://127.0.0.1:${PORT}/" || exit 1
 
 # Expose HTTP port
 EXPOSE 8080

@@ -86,12 +86,19 @@ def error_from(body):
     )
 
 
-def client_returning(responses):
-    """A PowerBIClient whose request() is driven by a path -> response table."""
-    client = PowerBIClient.__new__(PowerBIClient)
+class ScriptedClient(PowerBIClient):
+    """A PowerBIClient whose request() is driven by a path -> response table.
 
-    def request(method, path, json_body=None):
-        for key, value in responses.items():
+    Subclassed rather than monkeypatched: the diagnosis only ever calls
+    request(), so the base __init__ - and the credentials it wants - is beside
+    the point here.
+    """
+
+    def __init__(self, responses: dict[str, Any]) -> None:
+        self.responses = responses
+
+    def request(self, method: str, path: str, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
+        for key, value in self.responses.items():
             probing = "__mcp_probe" in str(json_body)
             if key in path and (json_body is None or probing or key != "executeQueries"):
                 if isinstance(value, Exception):
@@ -99,8 +106,9 @@ def client_returning(responses):
                 return value
         raise AssertionError(f"unexpected call {method} {path}")
 
-    client.request = request
-    return client
+
+def client_returning(responses):
+    return ScriptedClient(responses)
 
 
 def test_describe_datasource_names_what_matters():

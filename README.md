@@ -46,22 +46,39 @@ Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI wo
 
 ### Code Quality Tools
 
-This project uses [Ruff](https://docs.astral.sh/ruff/) for linting and formatting, and [ty](https://docs.astral.sh/ty/) for type checking.
+This project uses [Ruff](https://docs.astral.sh/ruff/) for linting and formatting, [ty](https://docs.astral.sh/ty/) for type checking, and [pytest](https://docs.pytest.org/) for tests.
 
 **Install development dependencies:**
 ```bash
+uv sync --locked --extra dev
+```
+
+**Run the checks CI runs:**
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
+```
+
+### Dependencies
+
+`uv.lock` is tracked. It names the exact version of everything that goes into a
+release, so a build from a given commit installs what that commit was tested
+with — the container build and CI both use it, and both fail rather than
+re-resolve if it has drifted from `pyproject.toml`.
+
+Upgrading is therefore a deliberate commit:
+
+```bash
+uv lock --upgrade      # or: uv lock --upgrade-package <name>
 uv sync --extra dev
 ```
 
-**Run Ruff linting:**
-```bash
-uv run ruff check .
-```
-
-**Run ty type checking:**
-```bash
-uv run ty check mcp_for_powerbi/
-```
+Then run the checks above before committing the new `uv.lock`. `ty` and `ruff`
+are pinned exactly in `pyproject.toml` because both are pre-1.0 and change what
+they accept between releases; moving either should be its own change, with
+whatever code it newly objects to fixed alongside.
 
 ## Quick Start
 
