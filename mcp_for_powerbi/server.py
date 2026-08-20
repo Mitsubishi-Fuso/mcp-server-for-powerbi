@@ -6,7 +6,7 @@ from contextvars import ContextVar, Token
 from typing import Any, Callable, Dict, NamedTuple, Tuple
 from fastmcp import FastMCP, Context
 from fastmcp.exceptions import ToolError
-from .obo_flow import ClaimsChallengeError
+from .auth_mode import ReauthenticationRequired
 from fastmcp.server.dependencies import get_http_headers
 
 BASE_URL = "https://api.powerbi.com/v1.0/myorg"
@@ -216,7 +216,7 @@ class PowerBIClient:
                 access_token = self._token_provider()
             except ToolError:
                 raise
-            except ClaimsChallengeError:
+            except ReauthenticationRequired:
                 # Must reach the transport layer intact so it can be turned into
                 # a 401 + WWW-Authenticate for the client to re-authenticate.
                 raise

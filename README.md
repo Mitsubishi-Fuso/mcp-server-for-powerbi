@@ -6,7 +6,7 @@
 
 Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI workspaces and semantic models, and for executing ad‑hoc DAX queries.
 
-**🔐 Now with OAuth/Entra ID support!** Seamlessly integrates with LibreChat and other OAuth-enabled clients using JWT validation and On-Behalf-Of flow.
+**🔐 OAuth/Entra ID support.** Integrates with LibreChat and other OAuth-enabled clients, with a choice of On-Behalf-Of or custody authentication.
 
 ## Architecture Overview
 
@@ -26,7 +26,7 @@ Model Context Protocol (MCP) server for exploring Microsoft Fabric / Power BI wo
 ### 🌐 HTTP Transport with OAuth (Recommended for Production)
 - Full Entra ID/Azure AD authentication
 - JWT token validation with JWKS
-- On-Behalf-Of (OBO) flow for Power BI and Fabric API access
+- On-Behalf-Of or custody authentication for Power BI access
 - Role and scope-based authorization
 - Claims challenge support for conditional access
 - **Perfect for LibreChat integration**
@@ -79,7 +79,7 @@ PORT=3001
 TENANT_ID=your-tenant-id
 AUDIENCE=your-api-app-id
 
-# Authentication mode: obo (or the deprecated passthrough)
+# Authentication mode: obo or custody
 AUTH_MODE=obo
 ENTRA_CLIENT_ID=your-client-id
 ENTRA_CLIENT_SECRET=your-client-secret
@@ -119,26 +119,80 @@ Both HTTP and STDIO modes use Entra ID OAuth2 with:
 ### Authentication modes
 
 `AUTH_MODE` selects how the server obtains a token for the Power BI API. The
-server will not choose for you: an unrecognised mode, or one whose credentials
+server will not choose for you: an unrecognised mode, or one whose prerequisites
 are missing, stops it at startup.
 
-| Mode | How the Power BI token is obtained |
-|---|---|
-| `obo` | On-Behalf-Of exchange of the caller's token, using `ENTRA_CLIENT_ID` / `ENTRA_CLIENT_SECRET`. Nothing long-lived is stored. |
-| `passthrough` | **Deprecated.** The caller's own token is sent on to Power BI unchanged. |
+| Mode | How the Power BI token is obtained | Holds credentials? |
+|---|---|---|
+| `obo` | On-Behalf-Of exchange of the caller's token | No |
+| `custody` | The server brokers the user's sign-in and keeps the refresh token | Yes, encrypted |
 
-Leaving `AUTH_MODE` unset selects `obo` when client credentials are present, so
-existing deployments are unaffected.
+Both use `ENTRA_CLIENT_ID` / `ENTRA_CLIENT_SECRET`, and both present Power BI a
+token issued to this server's own registration. Neither accepts a token that
+Entra issued for a different resource, which the MCP authorization spec
+prohibits.
 
-`passthrough` is deprecated because it is token passthrough: the server accepts
-an access token that Entra issued for the Power BI API rather than for this
-server, which the MCP authorization spec prohibits. It remains available for one
-release so deployments that were getting it implicitly have somewhere to land,
-and it logs a warning at startup.
+**Which to choose.** `obo` is simpler and stores nothing long-lived; prefer it
+where it works. Its limitation is structural: the exchange happens server-side,
+so a conditional access policy that applies to the Power BI API but not to the
+app the user signed in to fails with AADSTS50158, and the challenge arrives
+somewhere the user cannot answer it.
+
+`custody` exists for that case. The Power BI token comes from an authorization
+code redeemed with the user's browser in the loop, so conditional access is
+satisfied at sign-in. The cost is that the server holds a refresh token per
+user: encrypted at rest, but durable access to Power BI as that user, so treat
+the host accordingly.
+
+### Custody mode
+
+The MCP client runs an OAuth flow against **this server**, which runs its own
+against Entra. Two relationships, and no token crosses a boundary it was not
+issued for.
+
+```
+client ──/authorize──▶ server ──▶ Entra ──▶ server /callback
+client ◀── our code ── server        (Entra's tokens stop here)
+client ──/token─────▶ server ── our access + refresh token ──▶ client
+```
+
+Configure `PUBLIC_URL`, `CUSTODY_REDIRECT_URIS` and `SESSION_ENCRYPTION_KEY`
+(see [.env.example](.env.example)), and add `PUBLIC_URL/callback` as a redirect
+URI on the app registration.
+
+PKCE with `S256` is required of clients, redirect URIs are matched exactly,
+authorization codes are single use with a 60 second life, and access and refresh
+tokens are rotated together so a replayed one is refused. Only digests of the
+tokens are stored, so the store never holds a usable credential. Dynamic client
+registration is not supported; clients are configured.
+
+When a stored refresh token stops working — revoked, expired, or a policy
+re-evaluation demanding interaction — the session is dropped and the client
+receives a 401, prompting a fresh sign-in.
+
+**Sharing an app registration.** `ENTRA_CLIENT_ID` may be the same registration
+your MCP client already uses, which avoids requesting a new one. Note that Entra
+sign-in logs then cannot distinguish the two, and rotating the secret affects
+both. Pointing `ENTRA_CLIENT_ID` at a dedicated registration later is a config
+change.
+
+### Discovery
+
+Both modes serve [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) protected
+resource metadata at `/.well-known/oauth-protected-resource`, naming this server
+as the authorization server under `custody` and the Entra tenant under `obo`, so
+a client can discover where to authenticate instead of being configured with it.
+Custody also serves [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) metadata
+at `/.well-known/oauth-authorization-server`. Every 401 carries a
+`WWW-Authenticate` header pointing at the resource metadata.
 
 ## Client Integration Examples
 
 ### LibreChat (HTTP with OAuth)
+
+The client points at whoever issues the tokens, which differs by mode.
+
+**`AUTH_MODE=obo`** — the client authenticates against Entra:
 
 ```yaml
 mcpServers:
@@ -154,6 +208,27 @@ mcpServers:
       scope: "api://<api-app-id>/mcp.access openid profile offline_access"
       redirect_uri: http://localhost:3080/api/mcp/mcp-server-for-powerbi/oauth/callback
 ```
+
+**`AUTH_MODE=custody`** — the client authenticates against this server, which
+holds the Entra credentials, so no client secret is configured here:
+
+```yaml
+mcpServers:
+  mcp-server-for-powerbi:
+    type: streamable-http
+    url: http://localhost:3001/mcp
+    requiresOAuth: true
+    oauth:
+      authorization_url: https://powerbi-mcp.example.com/authorize
+      token_url: https://powerbi-mcp.example.com/token
+      client_id: librechat
+      scope: "powerbi.read"
+      redirect_uri: http://localhost:3080/api/mcp/mcp-server-for-powerbi/oauth/callback
+```
+
+The `redirect_uri` must appear in `CUSTODY_REDIRECT_URIS`, and
+`authorization_url` must be reachable from the user's browser — set `PUBLIC_URL`
+to the external address if the server sits behind an ingress.
 
 ### Cherry Studio (STDIO)
 ```json
@@ -199,8 +274,9 @@ docker build -t <acr-name>.azurecr.io/mcp-server-for-powerbi .
 docker run -it --rm -p 8080:8080 \
   -e TENANT_ID=<tenant-id> \
   -e AUDIENCE=<api-app-id> \
-  -e OBO_CLIENT_ID=<obo-client-id> \
-  -e OBO_CLIENT_SECRET=<obo-secret> \
+  -e AUTH_MODE=obo \
+  -e ENTRA_CLIENT_ID=<client-id> \
+  -e ENTRA_CLIENT_SECRET=<client-secret> \
   <acr-name>.azurecr.io/mcp-server-for-powerbi
 ```
 

@@ -1,31 +1,33 @@
 """Selection of the scheme by which the server obtains a Power BI token.
 
-The server used to decide this implicitly: run the On-Behalf-Of exchange when
-client credentials happened to be present, and otherwise reuse the caller's own
-bearer token for Power BI. That second path is token passthrough - the server
-accepting a token that was issued for a different resource - which the MCP
-authorization spec prohibits, and nothing in the configuration made it evident
-that a deployment had ended up there.
+Both supported modes obtain a token addressed to this server's own client
+registration. Neither accepts a token that Entra issued for something else,
+which the MCP authorization spec prohibits and which this server used to do
+whenever client credentials happened to be absent.
 
-A deployment now names the scheme it wants. Anything unrecognised, or a mode
-whose prerequisites are missing, stops the server rather than quietly selecting
+A deployment names the scheme it wants. Anything unrecognised, or a mode whose
+prerequisites are missing, stops the server rather than quietly selecting
 something else.
 """
 
 OBO = "obo"
-PASSTHROUGH = "passthrough"
+CUSTODY = "custody"
 
-SUPPORTED_MODES = (OBO, PASSTHROUGH)
-
-PASSTHROUGH_WARNING = (
-    "AUTH_MODE=passthrough sends the caller's own access token on to Power BI. The MCP "
-    "authorization spec prohibits accepting a token that was not issued for this server, "
-    "so this mode is deprecated and will be removed."
-)
+SUPPORTED_MODES = (OBO, CUSTODY)
 
 
 class AuthModeError(RuntimeError):
     """The requested authentication mode cannot be honoured."""
+
+
+class ReauthenticationRequired(Exception):
+    """Only a fresh interactive sign-in can fix this.
+
+    Each mode has its own version - a conditional access claims challenge under
+    OBO, a refused refresh token under custody - but they need the same
+    handling, and the tools must not see either as an ordinary failure they
+    could report and move on from.
+    """
 
 
 def resolve_auth_mode(configured: str | None, *, has_credentials: bool) -> str:
@@ -33,9 +35,8 @@ def resolve_auth_mode(configured: str | None, *, has_credentials: bool) -> str:
     requested = (configured or "").strip().lower()
 
     if not requested:
-        # Deployments that already carry credentials were running OBO, and
-        # keep doing so without being asked to change anything. Those that
-        # were relying on the old fallback have to say so out loud.
+        # Deployments already carrying credentials were running OBO, and keep
+        # doing so without being asked to change anything.
         if has_credentials:
             return OBO
         raise AuthModeError(
@@ -48,9 +49,9 @@ def resolve_auth_mode(configured: str | None, *, has_credentials: bool) -> str:
             f"AUTH_MODE={requested!r} is not a supported mode. Choose one of: {', '.join(SUPPORTED_MODES)}."
         )
 
-    if requested == OBO and not has_credentials:
+    if requested in (OBO, CUSTODY) and not has_credentials:
         raise AuthModeError(
-            "AUTH_MODE=obo requires ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET "
+            f"AUTH_MODE={requested} requires ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET "
             "(or the deprecated OBO_CLIENT_ID / OBO_CLIENT_SECRET)."
         )
 
