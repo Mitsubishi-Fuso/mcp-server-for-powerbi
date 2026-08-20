@@ -8,13 +8,13 @@ FROM ghcr.io/astral-sh/uv:python3.12-alpine AS builder
 WORKDIR /app
 
 # Copy dependency files and source code
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 COPY mcp_for_powerbi ./mcp_for_powerbi
 
-# Create virtual environment and install package (production mode, not editable)
-RUN uv venv /opt/venv && \
-    . /opt/venv/bin/activate && \
-    uv pip install --no-cache .
+# Install into a venv the runtime stage can copy wholesale. --no-editable so the
+# package is installed properly rather than linked back to the build context.
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+RUN uv sync --locked --no-dev --no-editable --no-cache
 
 # Stage 2: Runtime stage - minimal Alpine production image
 FROM python:3.12-alpine

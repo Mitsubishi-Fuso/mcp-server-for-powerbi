@@ -3,20 +3,28 @@ name = "mcp-server-for-powerbi"
 version = "0.2.0"
 description = "MCP Server for Power BI providing workspace, dataset, and DAX query tools with OAuth support"
 requires-python = ">=3.12"
+# Floors are the versions this project is actually tested against, and each is
+# bounded below the next major. The exact resolution lives in uv.lock, which is
+# tracked: this ships as a container image, so what we release is a set of
+# versions, not a set of ranges.
 dependencies = [
   "fastmcp ~= 2.14",
-  "requests>=2.32.5",
-  "PyJWT>=2.10.1",
-  "cryptography>=44.0.0",
-  "starlette>=0.41.3",
-  "uvicorn==0.40.0"
+  "requests ~= 2.34",
+  "PyJWT ~= 2.13",
+  "cryptography ~= 50.0",
+  "starlette >= 1.6, < 2",
+  "uvicorn == 0.40.0"
 ]
 
 [project.optional-dependencies]
+# ty and ruff are pinned exactly on purpose. Both are pre-1.0 and change
+# behaviour between patch releases - ty 0.0.73 rejects code 0.0.56 accepted,
+# and ruff 0.16 enabled a far wider default rule set than 0.15. Bumping either
+# should be a deliberate commit, not a side effect of resolving dependencies.
 dev = [
-  "ty",
-  "ruff",
-  "pytest>=8.0"
+  "ty == 0.0.73",
+  "ruff == 0.16.3",
+  "pytest >= 9.1, < 10"
 ]
 
 [project.scripts]
@@ -34,6 +42,12 @@ exclude = ["helm*", "build*", "scripts*"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+
+# Stated explicitly rather than inherited. This is the set ruff applied by
+# default before 0.16; naming it keeps a ruff upgrade from silently becoming a
+# lint policy change. Widening it is a decision to take on its own.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
