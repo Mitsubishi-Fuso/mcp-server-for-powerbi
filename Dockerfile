@@ -40,9 +40,11 @@ WORKDIR /app
 # Switch to non-root user
 USER mcpuser
 
-# Health check for Azure Container Apps
+# Health check for Azure Container Apps. Addressed by literal IPv4: uvicorn
+# binds 0.0.0.0, while `localhost` resolves to ::1 first inside the image, so
+# the probe was refused and the container never reported healthy.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider "http://127.0.0.1:${PORT}/" || exit 1
 
 # Expose HTTP port
 EXPOSE 8080
